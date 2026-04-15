@@ -8,9 +8,10 @@ const client = new Client({
 });
 
 const POSTULACIONES_CHANNEL_ID = '1493831725212635266';
+const UPDATES_CHANNEL_ID = '1493838384416952392';
 const GUILD_ID = '1000882508373688331';
+const ROL_MIEMBRO_GEOF = '1474252638832033884';
 
-// IDs de roles que pueden aceptar/rechazar
 const ROLES_IDS = [
   '1474513244084371697', // Duenio GEOF
   '1459343404155670710', // Director GEOF
@@ -19,10 +20,11 @@ const ROLES_IDS = [
   '1412987223086731336', // Sub Jefe GEOF
 ];
 
-// Menciones para notificar cuando llega postulacion
 const ROLES_MENCIONES = ROLES_IDS.map(id => '<@&' + id + '>').join(' ');
-
 const userResponses = new Map();
+
+// Guarda el userId del postulante por cada mensaje de postulacion
+const postulantesMap = new Map();
 
 client.once(Events.ClientReady, async () => {
   console.log('Bot listo como ' + client.user.tag);
@@ -39,6 +41,10 @@ function btnSig(id, label) {
   return new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId(id).setLabel(label).setStyle(ButtonStyle.Primary)
   );
+}
+
+function getNombre(member) {
+  return member?.nickname || member?.user?.globalName || member?.user?.username || 'Desconocido';
 }
 
 client.on(Events.InteractionCreate, async (interaction) => {
@@ -60,7 +66,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
     return;
   }
 
-  // Boton postular -> abre paso 1
+  // Boton postular
   if (interaction.isButton() && interaction.customId === 'postular_geof') {
     userResponses.delete(interaction.user.id);
     await interaction.showModal(buildModal('geof_paso1', 'G.E.O.F - Paso 1 de 4', [
@@ -155,7 +161,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
     return;
   }
 
-  // Paso 4 submit -> enviar postulacion
+  // Paso 4 submit -> enviar postulacion completa
   if (interaction.isModalSubmit() && interaction.customId === 'geof_paso4') {
     const stored = userResponses.get(interaction.user.id);
     if (!stored?.paso1 || !stored?.paso2 || !stored?.paso3) {
@@ -166,12 +172,11 @@ client.on(Events.InteractionCreate, async (interaction) => {
     const situacion = interaction.fields.getTextInputValue('situacion_rehenes');
     userResponses.delete(interaction.user.id);
 
-    // Obtener nickname del servidor (si no tiene, usa el nombre de Discord)
     const member = await interaction.guild.members.fetch(interaction.user.id).catch(() => null);
-    const nombreServidor = member?.nickname || member?.user.globalName || interaction.user.username;
+    const nombrePostulante = getNombre(member);
 
     const embed = new EmbedBuilder()
-      .setTitle('📋 Nueva Postulacion de ' + nombreServidor)
+      .setTitle('📋 Nueva Postulacion de ' + nombrePostulante)
       .setColor(0xFFD700)
       .setThumbnail(interaction.user.displayAvatarURL())
       .addFields(
@@ -190,15 +195,15 @@ client.on(Events.InteractionCreate, async (interaction) => {
         { name: '━━━━━━ 💬 MOTIVACION ━━━━━━', value: '\u200B' },
         { name: '🦅 ¿Por que queres ser parte del G.E.O.F?', value: paso3.por_que_geof },
         { name: '⚖️ ¿Es mas importante seguir ordenes o tomar iniciativa?', value: paso3.ordenes_iniciativa },
-        { name: '🗣️ ¿Quien es el encargado de negociar con rehenes y como se procede?', value: paso3.negociador },
+        { name: '🗣️ ¿Quien es el encargado de negociar y como se procede?', value: paso3.negociador },
         { name: '━━━━━━ 🔴 SITUACION TACTICA ━━━━━━', value: '\u200B' },
-        { name: '🔴 Operativo: sujeto armado con 2 rehenes en tienda. Exige vehiculo, retirar unidades y negociador. Sos el 1er GEOF en contacto. ¿Como inicias la negociacion y que estrategia usas para resolver sin bajas?', value: situacion },
+        { name: '🔴 Sujeto armado con 2 rehenes en tienda. Exige vehiculo, retirar unidades y negociador. Sos el 1er GEOF en contacto. ¿Como inicias y que estrategia usas para resolver sin bajas?', value: situacion },
       )
-      .setFooter({ text: 'Discord ID: ' + interaction.user.id + ' | Pendiente de revision' })
+      .setFooter({ text: 'UserID: ' + interaction.user.id + ' | Pendiente de revision' })
       .setTimestamp();
 
     const canal = await client.channels.fetch(POSTULACIONES_CHANNEL_ID);
-    await canal.send({
+    const msg = await canal.send({
       content: '🔔 Nueva postulacion al G.E.O.F! ' + ROLES_MENCIONES,
       embeds: [embed],
       components: [new ActionRowBuilder().addComponents(
@@ -206,37 +211,66 @@ client.on(Events.InteractionCreate, async (interaction) => {
         new ButtonBuilder().setCustomId('rechazar_' + interaction.user.id).setLabel('❌ Rechazar').setStyle(ButtonStyle.Danger)
       )]
     });
+
+    // Guardar el userId del postulante vinculado al mensaje
+    postulantesMap.set(msg.id, interaction.user.id);
+
     await interaction.reply({ content: '**Postulacion enviada con exito!** El G.E.O.F revisara tu solicitud. Buena suerte!', ephemeral: true });
     return;
   }
 
-  // Aceptar - verificacion por ID de rol
+  // ACEPTAR
   if (interaction.isButton() && interaction.customId.startsWith('aceptar_')) {
     const tieneRol = interaction.member.roles.cache.some(r => ROLES_IDS.includes(r.id));
     if (!tieneRol) {
       await interaction.reply({ content: '❌ No tenes permisos para aceptar postulaciones.', ephemeral: true });
       return;
     }
+
+    // Nombre del que acepta (nombre del servidor)
+    const nombreAceptador = getNombre(interaction.member);
+
+    // Obtener el userId del postulante desde el customId del boton
+    const postulantUserId = interaction.customId.replace('aceptar_', '');
+
+    // Darle el rol de miembro GEOF al postulante
+    const guild = interaction.guild;
+    const postulanteMember = await guild.members.fetch(postulantUserId).catch(() => null);
+    const nombrePostulante = getNombre(postulanteMember);
+
+    if (postulanteMember) {
+      await postulanteMember.roles.add(ROL_MIEMBRO_GEOF).catch(err => console.error('Error asignando rol:', err));
+    }
+
+    // Editar el embed de la postulacion
     const embed = EmbedBuilder.from(interaction.message.embeds[0])
       .setColor(0x00cc44)
-      .setFooter({ text: '✅ Aceptada por ' + (interaction.member.nickname || interaction.user.username) });
+      .setFooter({ text: '✅ Aceptada por ' + nombreAceptador });
     await interaction.message.edit({ embeds: [embed], components: [] });
-    await interaction.reply({ content: '✅ Postulacion **ACEPTADA** por ' + interaction.user });
+
+    // Mensaje en canal de updates
+    const updatesCanal = await client.channels.fetch(UPDATES_CHANNEL_ID);
+    await updatesCanal.send('📋 **Update:** ' + nombrePostulante + ' **>** nuevo **miembro G.E.O.F** <@&' + ROL_MIEMBRO_GEOF + '>');
+
+    await interaction.reply({ content: '✅ Postulacion **ACEPTADA**. Rol asignado a ' + nombrePostulante + '.', ephemeral: true });
     return;
   }
 
-  // Rechazar - verificacion por ID de rol
+  // RECHAZAR
   if (interaction.isButton() && interaction.customId.startsWith('rechazar_')) {
     const tieneRol = interaction.member.roles.cache.some(r => ROLES_IDS.includes(r.id));
     if (!tieneRol) {
       await interaction.reply({ content: '❌ No tenes permisos para rechazar postulaciones.', ephemeral: true });
       return;
     }
+
+    const nombreAceptador = getNombre(interaction.member);
+
     const embed = EmbedBuilder.from(interaction.message.embeds[0])
       .setColor(0xff3333)
-      .setFooter({ text: '❌ Rechazada por ' + (interaction.member.nickname || interaction.user.username) });
+      .setFooter({ text: '❌ Rechazada por ' + nombreAceptador });
     await interaction.message.edit({ embeds: [embed], components: [] });
-    await interaction.reply({ content: '❌ Postulacion **RECHAZADA** por ' + interaction.user });
+    await interaction.reply({ content: '❌ Postulacion **RECHAZADA** por ' + nombreAceptador + '.', ephemeral: true });
     return;
   }
 });
