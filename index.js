@@ -164,28 +164,28 @@ client.on(Events.InteractionCreate, async (interaction) => {
     const nombrePostulante = getNombre(member);
 
     const embed = new EmbedBuilder()
-      .setTitle('📋 Nueva Postulacion de ' + nombrePostulante)
+      .setTitle('Nueva Postulacion de ' + nombrePostulante)
       .setColor(0xFFD700)
       .setThumbnail(interaction.user.displayAvatarURL())
       .addFields(
-        { name: '━━━━━━ 📌 DATOS GENERALES ━━━━━━', value: '\u200B' },
+        { name: '━━━━━━ DATOS GENERALES ━━━━━━', value: '\u200B' },
         { name: '👤 Nombre IC', value: paso1.nombre_ic, inline: true },
         { name: '🎖️ Rango actual PFA', value: paso1.rango_pfa, inline: true },
         { name: '📅 Dias disponibles', value: paso1.dias_semana, inline: true },
         { name: '⭐ ¿Que te diferencia de otros postulantes?', value: paso1.diferencia },
         { name: '❓ ¿Que es el NVL (no valorar vida)? Da un ejemplo', value: paso1.nvl },
-        { name: '━━━━━━ 🔫 CONOCIMIENTO TACTICO ━━━━━━', value: '\u200B' },
+        { name: '━━━━━━ CONOCIMIENTO TACTICO ━━━━━━', value: '\u200B' },
         { name: '🚫 ¿Por que NO se debe amenazar al sospechoso?', value: paso2.no_amenazar },
         { name: '🔒 ¿Como actuarias en una toma de rehenes?', value: paso2.toma_rehenes },
         { name: '🚨 ¿Como actuarias en un secuestro?', value: paso2.secuestro },
         { name: '🏠 ¿Como se hace un ingreso tactico a una casa?', value: paso2.ingreso_tactico },
         { name: '🔶 ¿Que es un perimetro y como se arma?', value: paso2.perimetro_arma },
-        { name: '━━━━━━ 💬 MOTIVACION ━━━━━━', value: '\u200B' },
+        { name: '━━━━━━ MOTIVACION ━━━━━━', value: '\u200B' },
         { name: '🦅 ¿Por que queres ser parte del G.E.O.F?', value: paso3.por_que_geof },
         { name: '⚖️ ¿Es mas importante seguir ordenes o tomar iniciativa?', value: paso3.ordenes_iniciativa },
         { name: '🗣️ ¿Quien es el encargado de negociar y como se procede?', value: paso3.negociador },
-        { name: '━━━━━━ 🔴 SITUACION TACTICA ━━━━━━', value: '\u200B' },
-        { name: '🔴 Sujeto armado con 2 rehenes en tienda. Exige vehiculo, retirar unidades y negociador. Sos el 1er GEOF en contacto. ¿Como inicias y que estrategia usas para resolver sin bajas?', value: situacion },
+        { name: '━━━━━━ SITUACION TACTICA ━━━━━━', value: '\u200B' },
+        { name: '🔴 Sujeto armado con 2 rehenes en tienda. Exige vehiculo, retirar unidades y negociador. Sos el 1er GEOF. ¿Como inicias y que estrategia usas para resolver sin bajas?', value: situacion },
       )
       .setFooter({ text: 'UserID: ' + interaction.user.id + ' | Pendiente de revision' })
       .setTimestamp();
@@ -215,24 +215,29 @@ client.on(Events.InteractionCreate, async (interaction) => {
     const nombreAceptador = getNombre(interaction.member);
     const postulantUserId = interaction.customId.replace('aceptar_', '');
 
-    // Buscar al postulante y asignarle el rol
+    // Buscar al postulante
     const guild = interaction.guild;
     const postulanteMember = await guild.members.fetch(postulantUserId).catch(() => null);
 
+    // Asignar rol Miembro GEOF
     if (postulanteMember) {
-      // Asignar rol de miembro GEOF
-      await postulanteMember.roles.add(ROL_MIEMBRO_GEOF).catch(err => console.error('Error asignando rol:', err));
+      try {
+        await postulanteMember.roles.add(ROL_MIEMBRO_GEOF);
+        console.log('Rol asignado a ' + postulantUserId);
+      } catch (err) {
+        console.error('Error asignando rol: ' + err.message);
+      }
     }
 
-    // Editar embed de postulacion
+    // Editar embed
     const embed = EmbedBuilder.from(interaction.message.embeds[0])
       .setColor(0x00cc44)
       .setFooter({ text: '✅ Aceptada por ' + nombreAceptador });
     await interaction.message.edit({ embeds: [embed], components: [] });
 
-    // Mensaje en canal updates: "@postulante > @rol" (solo menciones, sin texto)
+    // Update: @postulante > NUEVO @rol
     const updatesCanal = await client.channels.fetch(UPDATES_CHANNEL_ID);
-    await updatesCanal.send('📋 **Update:** <@' + postulantUserId + '> **>** nuevo <@&' + ROL_MIEMBRO_GEOF + '>');
+    await updatesCanal.send('📋 **Update:** <@' + postulantUserId + '> **> NUEVO** <@&' + ROL_MIEMBRO_GEOF + '>');
 
     await interaction.reply({ content: '✅ Postulacion **ACEPTADA** por ' + nombreAceptador + '.', ephemeral: true });
     return;
