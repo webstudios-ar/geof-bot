@@ -214,12 +214,9 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
     const nombreAceptador = getNombre(interaction.member);
     const postulantUserId = interaction.customId.replace('aceptar_', '');
-
-    // Buscar al postulante
     const guild = interaction.guild;
     const postulanteMember = await guild.members.fetch(postulantUserId).catch(() => null);
 
-    // Asignar rol Miembro GEOF
     if (postulanteMember) {
       try {
         await postulanteMember.roles.add(ROL_MIEMBRO_GEOF);
@@ -229,13 +226,11 @@ client.on(Events.InteractionCreate, async (interaction) => {
       }
     }
 
-    // Editar embed
     const embed = EmbedBuilder.from(interaction.message.embeds[0])
       .setColor(0x00cc44)
       .setFooter({ text: '✅ Aceptada por ' + nombreAceptador });
     await interaction.message.edit({ embeds: [embed], components: [] });
 
-    // Update: @postulante > NUEVO @rol
     const updatesCanal = await client.channels.fetch(UPDATES_CHANNEL_ID);
     await updatesCanal.send('📋 **Update:** <@' + postulantUserId + '> **> NUEVO** <@&' + ROL_MIEMBRO_GEOF + '>');
 
@@ -252,10 +247,17 @@ client.on(Events.InteractionCreate, async (interaction) => {
     }
 
     const nombreAceptador = getNombre(interaction.member);
+    const postulantUserId = interaction.customId.replace('rechazar_', '');
+
     const embed = EmbedBuilder.from(interaction.message.embeds[0])
       .setColor(0xff3333)
       .setFooter({ text: '❌ Rechazada por ' + nombreAceptador });
     await interaction.message.edit({ embeds: [embed], components: [] });
+
+    // Mensaje en canal updates al rechazar
+    const updatesCanal = await client.channels.fetch(UPDATES_CHANNEL_ID);
+    await updatesCanal.send('📋 **Update:** <@' + postulantUserId + '> **> No aprobaste el examen, intentalo nuevamente en 24 horas.**');
+
     await interaction.reply({ content: '❌ Postulacion **RECHAZADA** por ' + nombreAceptador + '.', ephemeral: true });
     return;
   }
