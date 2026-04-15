@@ -1,0 +1,15 @@
+{
+    "name": "geof-bot",
+    "version": "1.0.0",
+    "description": "Bot de postulaciones para el Grupo G.E.O.F - Kilombo RP",
+    "main": "index.js",
+    "scripts": {
+          "start": "node index.js"
+    },
+    "dependencies": {
+          "discord.js": "^14.18.0"
+    },
+    "engines": {
+          "node": ">=18.0.0"
+    }
+}
