@@ -1,16 +1,6 @@
 const {
-  Client,
-  GatewayIntentBits,
-  ActionRowBuilder,
-  ButtonBuilder,
-  ButtonStyle,
-  ModalBuilder,
-  TextInputBuilder,
-  TextInputStyle,
-  EmbedBuilder,
-  Events,
-  REST,
-  Routes,
+  Client, GatewayIntentBits, ActionRowBuilder, ButtonBuilder, ButtonStyle,
+  ModalBuilder, TextInputBuilder, TextInputStyle, EmbedBuilder, Events, REST, Routes,
 } = require('discord.js');
 
 const client = new Client({
@@ -24,56 +14,47 @@ const client = new Client({
 
 const POSTULACIONES_CHANNEL_ID = '1493831725212635266';
 const GUILD_ID = '1000882508373688331';
-
 const ROLES_PERMITIDOS = ['jefe geof', 'sub jefe geof', 'comandante geof', 'director geof'];
-
 const userResponses = new Map();
 
 client.once(Events.ClientReady, async () => {
   console.log('Bot listo como ' + client.user.tag);
   const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
-  const commands = [{ name: 'setup-geof', description: 'Envia el panel de postulacion al G.E.O.F' }];
   try {
-    await rest.put(Routes.applicationGuildCommands(client.user.id, GUILD_ID), { body: commands });
-    console.log('Comandos registrados correctamente');
-  } catch (err) {
-    console.error('Error:', err);
-  }
+    await rest.put(Routes.applicationGuildCommands(client.user.id, GUILD_ID), {
+      body: [{ name: 'setup-geof', description: 'Envia el panel de postulacion al G.E.O.F' }]
+    });
+    console.log('Comandos registrados');
+  } catch (err) { console.error(err); }
 });
 
 client.on(Events.InteractionCreate, async (interaction) => {
 
-  // COMANDO /setup-geof
+  // /setup-geof
   if (interaction.isChatInputCommand() && interaction.commandName === 'setup-geof') {
     const embed = new EmbedBuilder()
       .setTitle('Postulacion al G.E.O.F - Unete a Nuestro Equipo!')
-      .setDescription('Queres formar parte del Grupo Especial de Operaciones y Fuerzas?\n\nCompleta el formulario y postulate para unirte a nuestra unidad de elite.\nUna vez completada la postulacion, nuestros superiores evaluaran tu solicitud.\nAsegurate de cumplir con todos los requisitos antes de postularte.')
+      .setDescription('Queres formar parte del Grupo Especial de Operaciones y Fuerzas?\n\nCompleta el formulario y postulate.\nNuestros superiores evaluaran tu solicitud.\nAsegurate de cumplir con todos los requisitos.')
       .setColor(0xFFD700)
       .setFooter({ text: 'G.E.O.F | Kilombo RP 2022 - 2025' })
       .setTimestamp();
-    const row = new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId('postular_geof').setLabel('Enviar postulacion').setStyle(ButtonStyle.Primary)
-    );
-    await interaction.reply({ embeds: [embed], components: [row] });
+    await interaction.reply({
+      embeds: [embed],
+      components: [new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId('postular_geof').setLabel('Enviar postulacion').setStyle(ButtonStyle.Primary)
+      )]
+    });
     return;
   }
 
-  // PASO 1 - abrir modal
+  // Boton postular -> abre PASO 1
   if (interaction.isButton() && interaction.customId === 'postular_geof') {
     userResponses.delete(interaction.user.id);
-    const modal = new ModalBuilder().setCustomId('geof_paso1').setTitle('G.E.O.F - Paso 1 de 4');
-    modal.addComponents(
-      new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('nombre_ic').setLabel('Nombre IC').setStyle(TextInputStyle.Short).setRequired(true)),
-      new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('rango_pfa').setLabel('Rango actual en la PFA').setStyle(TextInputStyle.Short).setRequired(true)),
-      new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('dias_semana').setLabel('Dias disponibles por semana').setStyle(TextInputStyle.Short).setRequired(true).setPlaceholder('Ej: Lunes, Miercoles, Viernes')),
-      new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('diferencia').setLabel('Que te diferencia de otros postulantes?').setStyle(TextInputStyle.Paragraph).setRequired(true)),
-      new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('nvl').setLabel('Que es el NVL? (no valorar vida) + ejemplo').setStyle(TextInputStyle.Paragraph).setRequired(true))
-    );
-    await interaction.showModal(modal);
+    await interaction.showModal(buildModal1());
     return;
   }
 
-  // PASO 1 - guardar y mostrar siguiente
+  // PASO 1 submit -> guarda y abre PASO 2 directamente
   if (interaction.isModalSubmit() && interaction.customId === 'geof_paso1') {
     userResponses.set(interaction.user.id, {
       paso1: {
@@ -84,28 +65,12 @@ client.on(Events.InteractionCreate, async (interaction) => {
         nvl: interaction.fields.getTextInputValue('nvl'),
       }
     });
-    const row = new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId('geof_sig2').setLabel('Siguiente - Paso 2').setStyle(ButtonStyle.Primary)
-    );
-    await interaction.reply({ content: '**Paso 1 completado!** Hace clic para continuar con el Paso 2.', components: [row], ephemeral: true });
+    // Abrimos el siguiente modal DIRECTAMENTE desde el submit
+    await interaction.showModal(buildModal2());
     return;
   }
 
-  // PASO 2 - abrir modal (primeras 5 preguntas tacticas)
-  if (interaction.isButton() && interaction.customId === 'geof_sig2') {
-    const modal = new ModalBuilder().setCustomId('geof_paso2').setTitle('G.E.O.F - Paso 2 de 4');
-    modal.addComponents(
-      new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('no_amenazar').setLabel('Por que NO amenazar al sospechoso?').setStyle(TextInputStyle.Paragraph).setRequired(true)),
-      new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('toma_rehenes').setLabel('Como actuarias en una toma de rehenes?').setStyle(TextInputStyle.Paragraph).setRequired(true)),
-      new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('secuestro').setLabel('Como actuarias en un secuestro?').setStyle(TextInputStyle.Paragraph).setRequired(true)),
-      new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('ingreso_tactico').setLabel('Como se hace un ingreso tactico a una casa?').setStyle(TextInputStyle.Paragraph).setRequired(true)),
-      new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('perimetro_arma').setLabel('Que es un perimetro y como se arma?').setStyle(TextInputStyle.Paragraph).setRequired(true))
-    );
-    await interaction.showModal(modal);
-    return;
-  }
-
-  // PASO 2 - guardar y mostrar siguiente
+  // PASO 2 submit -> guarda y abre PASO 3 directamente
   if (interaction.isModalSubmit() && interaction.customId === 'geof_paso2') {
     const existing = userResponses.get(interaction.user.id) || {};
     existing.paso2 = {
@@ -116,26 +81,11 @@ client.on(Events.InteractionCreate, async (interaction) => {
       perimetro_arma: interaction.fields.getTextInputValue('perimetro_arma'),
     };
     userResponses.set(interaction.user.id, existing);
-    const row = new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId('geof_sig3').setLabel('Siguiente - Paso 3').setStyle(ButtonStyle.Primary)
-    );
-    await interaction.reply({ content: '**Paso 2 completado!** Hace clic para continuar con el Paso 3.', components: [row], ephemeral: true });
+    await interaction.showModal(buildModal3());
     return;
   }
 
-  // PASO 3 - abrir modal (motivacion)
-  if (interaction.isButton() && interaction.customId === 'geof_sig3') {
-    const modal = new ModalBuilder().setCustomId('geof_paso3').setTitle('G.E.O.F - Paso 3 de 4');
-    modal.addComponents(
-      new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('por_que_geof').setLabel('Por que queres ser parte del G.E.O.F?').setStyle(TextInputStyle.Paragraph).setRequired(true)),
-      new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('ordenes_iniciativa').setLabel('Seguir ordenes o tomar iniciativa? Por que?').setStyle(TextInputStyle.Paragraph).setRequired(true)),
-      new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('negociador').setLabel('Quien negocia en una toma de rehenes?').setStyle(TextInputStyle.Paragraph).setRequired(true).setPlaceholder('Quien es el encargado y como se procede?'))
-    );
-    await interaction.showModal(modal);
-    return;
-  }
-
-  // PASO 3 - guardar y mostrar siguiente
+  // PASO 3 submit -> guarda y abre PASO 4 directamente
   if (interaction.isModalSubmit() && interaction.customId === 'geof_paso3') {
     const existing = userResponses.get(interaction.user.id) || {};
     existing.paso3 = {
@@ -144,35 +94,15 @@ client.on(Events.InteractionCreate, async (interaction) => {
       negociador: interaction.fields.getTextInputValue('negociador'),
     };
     userResponses.set(interaction.user.id, existing);
-    const row = new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId('geof_sig4').setLabel('Siguiente - Paso 4 (Final)').setStyle(ButtonStyle.Success)
-    );
-    await interaction.reply({ content: '**Paso 3 completado!** Ultimo paso — hace clic para completar la situacion final.', components: [row], ephemeral: true });
+    await interaction.showModal(buildModal4());
     return;
   }
 
-  // PASO 4 - abrir modal (situacion rehenes)
-  if (interaction.isButton() && interaction.customId === 'geof_sig4') {
-    const modal = new ModalBuilder().setCustomId('geof_paso4').setTitle('G.E.O.F - Paso 4 de 4 (Final)');
-    modal.addComponents(
-      new ActionRowBuilder().addComponents(
-        new TextInputBuilder()
-          .setCustomId('situacion_rehenes')
-          .setLabel('SITUACION TACTICA (lee la descripcion)')
-          .setStyle(TextInputStyle.Paragraph)
-          .setRequired(true)
-          .setPlaceholder('Operativo activo: sujeto armado con 2 rehenes en una tienda. Exige vehiculo, retirar unidades y hablar con negociador. Sos el primer GEOF en contacto. Como inicias la negociacion y que estrategia seguis para resolver sin bajas?')
-      )
-    );
-    await interaction.showModal(modal);
-    return;
-  }
-
-  // PASO 4 - enviar postulacion completa
+  // PASO 4 submit -> enviar postulacion completa
   if (interaction.isModalSubmit() && interaction.customId === 'geof_paso4') {
     const stored = userResponses.get(interaction.user.id);
-    if (!stored || !stored.paso1 || !stored.paso2 || !stored.paso3) {
-      await interaction.reply({ content: 'Error: tus respuestas se perdieron. Comenzá la postulacion nuevamente.', ephemeral: true });
+    if (!stored?.paso1 || !stored?.paso2 || !stored?.paso3) {
+      await interaction.reply({ content: 'Error: tus respuestas se perdieron. Comenzá de nuevo.', ephemeral: true });
       return;
     }
     const { paso1, paso2, paso3 } = stored;
@@ -206,36 +136,86 @@ client.on(Events.InteractionCreate, async (interaction) => {
       .setFooter({ text: 'Discord ID: ' + interaction.user.id + ' | Pendiente de revision' })
       .setTimestamp();
 
-    const botones = new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId('aceptar_' + interaction.user.id).setLabel('Aceptar').setStyle(ButtonStyle.Success),
-      new ButtonBuilder().setCustomId('rechazar_' + interaction.user.id).setLabel('Rechazar').setStyle(ButtonStyle.Danger)
-    );
-
     const canal = await client.channels.fetch(POSTULACIONES_CHANNEL_ID);
-    await canal.send({ embeds: [embed], components: [botones] });
-    await interaction.reply({ content: '**Postulacion enviada con exito!** El equipo del G.E.O.F revisara tu solicitud. Buena suerte!', ephemeral: true });
+    await canal.send({
+      embeds: [embed],
+      components: [new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId('aceptar_' + interaction.user.id).setLabel('Aceptar').setStyle(ButtonStyle.Success),
+        new ButtonBuilder().setCustomId('rechazar_' + interaction.user.id).setLabel('Rechazar').setStyle(ButtonStyle.Danger)
+      )]
+    });
+    await interaction.reply({ content: 'Postulacion enviada con exito! El G.E.O.F revisara tu solicitud. Buena suerte!', ephemeral: true });
     return;
   }
 
-  // ACEPTAR
+  // Aceptar
   if (interaction.isButton() && interaction.customId.startsWith('aceptar_')) {
-    const tieneRol = interaction.member.roles.cache.some((r) => ROLES_PERMITIDOS.includes(r.name.toLowerCase()));
-    if (!tieneRol) { await interaction.reply({ content: 'No tenes permisos para aceptar postulaciones.', ephemeral: true }); return; }
+    const tieneRol = interaction.member.roles.cache.some(r => ROLES_PERMITIDOS.includes(r.name.toLowerCase()));
+    if (!tieneRol) { await interaction.reply({ content: 'No tenes permisos.', ephemeral: true }); return; }
     const embed = EmbedBuilder.from(interaction.message.embeds[0]).setColor(0x00cc44).setFooter({ text: 'Aceptada por ' + interaction.user.username });
     await interaction.message.edit({ embeds: [embed], components: [] });
     await interaction.reply({ content: 'Postulacion ACEPTADA por ' + interaction.user });
     return;
   }
 
-  // RECHAZAR
+  // Rechazar
   if (interaction.isButton() && interaction.customId.startsWith('rechazar_')) {
-    const tieneRol = interaction.member.roles.cache.some((r) => ROLES_PERMITIDOS.includes(r.name.toLowerCase()));
-    if (!tieneRol) { await interaction.reply({ content: 'No tenes permisos para rechazar postulaciones.', ephemeral: true }); return; }
+    const tieneRol = interaction.member.roles.cache.some(r => ROLES_PERMITIDOS.includes(r.name.toLowerCase()));
+    if (!tieneRol) { await interaction.reply({ content: 'No tenes permisos.', ephemeral: true }); return; }
     const embed = EmbedBuilder.from(interaction.message.embeds[0]).setColor(0xff3333).setFooter({ text: 'Rechazada por ' + interaction.user.username });
     await interaction.message.edit({ embeds: [embed], components: [] });
     await interaction.reply({ content: 'Postulacion RECHAZADA por ' + interaction.user });
     return;
   }
 });
+
+function buildModal1() {
+  const modal = new ModalBuilder().setCustomId('geof_paso1').setTitle('G.E.O.F - Paso 1 de 4');
+  modal.addComponents(
+    new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('nombre_ic').setLabel('Nombre IC').setStyle(TextInputStyle.Short).setRequired(true)),
+    new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('rango_pfa').setLabel('Rango actual en la PFA').setStyle(TextInputStyle.Short).setRequired(true)),
+    new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('dias_semana').setLabel('Dias disponibles por semana').setStyle(TextInputStyle.Short).setRequired(true).setPlaceholder('Ej: Lunes, Miercoles, Viernes')),
+    new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('diferencia').setLabel('Que te diferencia de otros postulantes?').setStyle(TextInputStyle.Paragraph).setRequired(true)),
+    new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('nvl').setLabel('Que es el NVL (no valorar vida)? + ejemplo').setStyle(TextInputStyle.Paragraph).setRequired(true))
+  );
+  return modal;
+}
+
+function buildModal2() {
+  const modal = new ModalBuilder().setCustomId('geof_paso2').setTitle('G.E.O.F - Paso 2 de 4');
+  modal.addComponents(
+    new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('no_amenazar').setLabel('Por que NO amenazar al sospechoso?').setStyle(TextInputStyle.Paragraph).setRequired(true)),
+    new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('toma_rehenes').setLabel('Como actuarias en una toma de rehenes?').setStyle(TextInputStyle.Paragraph).setRequired(true)),
+    new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('secuestro').setLabel('Como actuarias en un secuestro?').setStyle(TextInputStyle.Paragraph).setRequired(true)),
+    new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('ingreso_tactico').setLabel('Como se hace un ingreso tactico a una casa?').setStyle(TextInputStyle.Paragraph).setRequired(true)),
+    new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('perimetro_arma').setLabel('Que es un perimetro y como se arma?').setStyle(TextInputStyle.Paragraph).setRequired(true))
+  );
+  return modal;
+}
+
+function buildModal3() {
+  const modal = new ModalBuilder().setCustomId('geof_paso3').setTitle('G.E.O.F - Paso 3 de 4');
+  modal.addComponents(
+    new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('por_que_geof').setLabel('Por que queres ser parte del G.E.O.F?').setStyle(TextInputStyle.Paragraph).setRequired(true)),
+    new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('ordenes_iniciativa').setLabel('Seguir ordenes o tomar iniciativa? Por que?').setStyle(TextInputStyle.Paragraph).setRequired(true)),
+    new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('negociador').setLabel('Quien negocia en una toma de rehenes?').setStyle(TextInputStyle.Paragraph).setRequired(true).setPlaceholder('Quien es el encargado y como se procede correctamente?'))
+  );
+  return modal;
+}
+
+function buildModal4() {
+  const modal = new ModalBuilder().setCustomId('geof_paso4').setTitle('G.E.O.F - Paso 4 de 4 (Final)');
+  modal.addComponents(
+    new ActionRowBuilder().addComponents(
+      new TextInputBuilder()
+        .setCustomId('situacion_rehenes')
+        .setLabel('SITUACION TACTICA - Lee el placeholder')
+        .setStyle(TextInputStyle.Paragraph)
+        .setRequired(true)
+        .setPlaceholder('Operativo activo: sujeto armado con 2 rehenes en una tienda. Exige vehiculo, retirar unidades y hablar con negociador. Sos el primer GEOF en contacto. Como inicias la negociacion y que estrategia seguis para resolver sin bajas?')
+    )
+  );
+  return modal;
+}
 
 client.login(process.env.TOKEN);
