@@ -9,7 +9,19 @@ const client = new Client({
 
 const POSTULACIONES_CHANNEL_ID = '1493831725212635266';
 const GUILD_ID = '1000882508373688331';
-const ROLES_PERMITIDOS = ['jefe geof', 'sub jefe geof', 'comandante geof', 'director geof'];
+
+// IDs de roles que pueden aceptar/rechazar
+const ROLES_IDS = [
+  '1474513244084371697', // Duenio GEOF
+  '1459343404155670710', // Director GEOF
+  '1384748336447361085', // Comandante GEOF
+  '1457168018269278402', // Jefe GEOF
+  '1412987223086731336', // Sub Jefe GEOF
+];
+
+// Menciones para notificar cuando llega postulacion
+const ROLES_MENCIONES = ROLES_IDS.map(id => '<@&' + id + '>').join(' ');
+
 const userResponses = new Map();
 
 client.once(Events.ClientReady, async () => {
@@ -31,6 +43,7 @@ function btnSig(id, label) {
 
 client.on(Events.InteractionCreate, async (interaction) => {
 
+  // /setup-geof
   if (interaction.isChatInputCommand() && interaction.commandName === 'setup-geof') {
     const embed = new EmbedBuilder()
       .setTitle('Postulacion al G.E.O.F - Unete a Nuestro Equipo!')
@@ -47,6 +60,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
     return;
   }
 
+  // Boton postular -> abre paso 1
   if (interaction.isButton() && interaction.customId === 'postular_geof') {
     userResponses.delete(interaction.user.id);
     await interaction.showModal(buildModal('geof_paso1', 'G.E.O.F - Paso 1 de 4', [
@@ -59,6 +73,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
     return;
   }
 
+  // Paso 1 submit
   if (interaction.isModalSubmit() && interaction.customId === 'geof_paso1') {
     userResponses.set(interaction.user.id, {
       paso1: {
@@ -73,6 +88,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
     return;
   }
 
+  // Boton paso 2
   if (interaction.isButton() && interaction.customId === 'geof_abrir2') {
     await interaction.showModal(buildModal('geof_paso2', 'G.E.O.F - Paso 2 de 4', [
       { id: 'no_amenazar', label: 'Por que NO amenazar al sospechoso?', style: 'Paragraph' },
@@ -84,6 +100,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
     return;
   }
 
+  // Paso 2 submit
   if (interaction.isModalSubmit() && interaction.customId === 'geof_paso2') {
     const existing = userResponses.get(interaction.user.id) || {};
     existing.paso2 = {
@@ -98,6 +115,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
     return;
   }
 
+  // Boton paso 3
   if (interaction.isButton() && interaction.customId === 'geof_abrir3') {
     await interaction.showModal(buildModal('geof_paso3', 'G.E.O.F - Paso 3 de 4', [
       { id: 'por_que_geof', label: 'Por que queres ser parte del G.E.O.F?', style: 'Paragraph' },
@@ -107,6 +125,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
     return;
   }
 
+  // Paso 3 submit
   if (interaction.isModalSubmit() && interaction.customId === 'geof_paso3') {
     const existing = userResponses.get(interaction.user.id) || {};
     existing.paso3 = {
@@ -119,13 +138,14 @@ client.on(Events.InteractionCreate, async (interaction) => {
     return;
   }
 
+  // Boton paso 4
   if (interaction.isButton() && interaction.customId === 'geof_abrir4') {
     const modal = new ModalBuilder().setCustomId('geof_paso4').setTitle('G.E.O.F - Paso 4 de 4 (Final)');
     modal.addComponents(
       new ActionRowBuilder().addComponents(
         new TextInputBuilder()
           .setCustomId('situacion_rehenes')
-          .setLabel('SITUACION TACTICA (lee la descripcion abajo)')
+          .setLabel('SITUACION TACTICA (lee el placeholder)')
           .setStyle(TextInputStyle.Paragraph)
           .setRequired(true)
           .setPlaceholder('2 rehenes en tienda. Exige vehiculo y negociador. Sos el 1er GEOF. Como negocias?')
@@ -135,6 +155,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
     return;
   }
 
+  // Paso 4 submit -> enviar postulacion
   if (interaction.isModalSubmit() && interaction.customId === 'geof_paso4') {
     const stored = userResponses.get(interaction.user.id);
     if (!stored?.paso1 || !stored?.paso2 || !stored?.paso3) {
@@ -145,60 +166,77 @@ client.on(Events.InteractionCreate, async (interaction) => {
     const situacion = interaction.fields.getTextInputValue('situacion_rehenes');
     userResponses.delete(interaction.user.id);
 
+    // Obtener nickname del servidor (si no tiene, usa el nombre de Discord)
+    const member = await interaction.guild.members.fetch(interaction.user.id).catch(() => null);
+    const nombreServidor = member?.nickname || member?.user.globalName || interaction.user.username;
+
     const embed = new EmbedBuilder()
-      .setTitle('Nueva Postulacion de ' + interaction.user.username)
+      .setTitle('📋 Nueva Postulacion de ' + nombreServidor)
       .setColor(0xFFD700)
       .setThumbnail(interaction.user.displayAvatarURL())
       .addFields(
-        { name: '━━━ DATOS GENERALES ━━━', value: '\u200B' },
-        { name: 'Nombre IC', value: paso1.nombre_ic, inline: true },
-        { name: 'Rango actual PFA', value: paso1.rango_pfa, inline: true },
-        { name: 'Dias disponibles', value: paso1.dias_semana, inline: true },
-        { name: 'Que te diferencia?', value: paso1.diferencia },
-        { name: 'Que es el NVL?', value: paso1.nvl },
-        { name: '━━━ CONOCIMIENTO TACTICO ━━━', value: '\u200B' },
-        { name: 'Por que no amenazar al sospechoso?', value: paso2.no_amenazar },
-        { name: 'Toma de rehenes', value: paso2.toma_rehenes },
-        { name: 'Secuestro', value: paso2.secuestro },
-        { name: 'Ingreso tactico', value: paso2.ingreso_tactico },
-        { name: 'Perimetro', value: paso2.perimetro_arma },
-        { name: '━━━ MOTIVACION ━━━', value: '\u200B' },
-        { name: 'Por que G.E.O.F?', value: paso3.por_que_geof },
-        { name: 'Ordenes o iniciativa?', value: paso3.ordenes_iniciativa },
-        { name: 'Quien negocia?', value: paso3.negociador },
-        { name: '━━━ SITUACION TACTICA ━━━', value: '\u200B' },
-        { name: 'Situacion de rehenes - Respuesta', value: situacion },
+        { name: '━━━━━━ 📌 DATOS GENERALES ━━━━━━', value: '\u200B' },
+        { name: '👤 Nombre IC', value: paso1.nombre_ic, inline: true },
+        { name: '🎖️ Rango actual PFA', value: paso1.rango_pfa, inline: true },
+        { name: '📅 Dias disponibles', value: paso1.dias_semana, inline: true },
+        { name: '⭐ ¿Que te diferencia de otros postulantes?', value: paso1.diferencia },
+        { name: '❓ ¿Que es el NVL (no valorar vida)? Da un ejemplo', value: paso1.nvl },
+        { name: '━━━━━━ 🔫 CONOCIMIENTO TACTICO ━━━━━━', value: '\u200B' },
+        { name: '🚫 ¿Por que NO se debe amenazar al sospechoso?', value: paso2.no_amenazar },
+        { name: '🔒 ¿Como actuarias en una toma de rehenes?', value: paso2.toma_rehenes },
+        { name: '🚨 ¿Como actuarias en un secuestro?', value: paso2.secuestro },
+        { name: '🏠 ¿Como se hace un ingreso tactico a una casa?', value: paso2.ingreso_tactico },
+        { name: '🔶 ¿Que es un perimetro y como se arma?', value: paso2.perimetro_arma },
+        { name: '━━━━━━ 💬 MOTIVACION ━━━━━━', value: '\u200B' },
+        { name: '🦅 ¿Por que queres ser parte del G.E.O.F?', value: paso3.por_que_geof },
+        { name: '⚖️ ¿Es mas importante seguir ordenes o tomar iniciativa?', value: paso3.ordenes_iniciativa },
+        { name: '🗣️ ¿Quien es el encargado de negociar con rehenes y como se procede?', value: paso3.negociador },
+        { name: '━━━━━━ 🔴 SITUACION TACTICA ━━━━━━', value: '\u200B' },
+        { name: '🔴 Operativo: sujeto armado con 2 rehenes en tienda. Exige vehiculo, retirar unidades y negociador. Sos el 1er GEOF en contacto. ¿Como inicias la negociacion y que estrategia usas para resolver sin bajas?', value: situacion },
       )
       .setFooter({ text: 'Discord ID: ' + interaction.user.id + ' | Pendiente de revision' })
       .setTimestamp();
 
     const canal = await client.channels.fetch(POSTULACIONES_CHANNEL_ID);
     await canal.send({
+      content: '🔔 Nueva postulacion al G.E.O.F! ' + ROLES_MENCIONES,
       embeds: [embed],
       components: [new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId('aceptar_' + interaction.user.id).setLabel('Aceptar').setStyle(ButtonStyle.Success),
-        new ButtonBuilder().setCustomId('rechazar_' + interaction.user.id).setLabel('Rechazar').setStyle(ButtonStyle.Danger)
+        new ButtonBuilder().setCustomId('aceptar_' + interaction.user.id).setLabel('✅ Aceptar').setStyle(ButtonStyle.Success),
+        new ButtonBuilder().setCustomId('rechazar_' + interaction.user.id).setLabel('❌ Rechazar').setStyle(ButtonStyle.Danger)
       )]
     });
     await interaction.reply({ content: '**Postulacion enviada con exito!** El G.E.O.F revisara tu solicitud. Buena suerte!', ephemeral: true });
     return;
   }
 
+  // Aceptar - verificacion por ID de rol
   if (interaction.isButton() && interaction.customId.startsWith('aceptar_')) {
-    const tieneRol = interaction.member.roles.cache.some(r => ROLES_PERMITIDOS.includes(r.name.toLowerCase()));
-    if (!tieneRol) { await interaction.reply({ content: 'No tenes permisos.', ephemeral: true }); return; }
-    const embed = EmbedBuilder.from(interaction.message.embeds[0]).setColor(0x00cc44).setFooter({ text: 'Aceptada por ' + interaction.user.username });
+    const tieneRol = interaction.member.roles.cache.some(r => ROLES_IDS.includes(r.id));
+    if (!tieneRol) {
+      await interaction.reply({ content: '❌ No tenes permisos para aceptar postulaciones.', ephemeral: true });
+      return;
+    }
+    const embed = EmbedBuilder.from(interaction.message.embeds[0])
+      .setColor(0x00cc44)
+      .setFooter({ text: '✅ Aceptada por ' + (interaction.member.nickname || interaction.user.username) });
     await interaction.message.edit({ embeds: [embed], components: [] });
-    await interaction.reply({ content: 'Postulacion **ACEPTADA** por ' + interaction.user });
+    await interaction.reply({ content: '✅ Postulacion **ACEPTADA** por ' + interaction.user });
     return;
   }
 
+  // Rechazar - verificacion por ID de rol
   if (interaction.isButton() && interaction.customId.startsWith('rechazar_')) {
-    const tieneRol = interaction.member.roles.cache.some(r => ROLES_PERMITIDOS.includes(r.name.toLowerCase()));
-    if (!tieneRol) { await interaction.reply({ content: 'No tenes permisos.', ephemeral: true }); return; }
-    const embed = EmbedBuilder.from(interaction.message.embeds[0]).setColor(0xff3333).setFooter({ text: 'Rechazada por ' + interaction.user.username });
+    const tieneRol = interaction.member.roles.cache.some(r => ROLES_IDS.includes(r.id));
+    if (!tieneRol) {
+      await interaction.reply({ content: '❌ No tenes permisos para rechazar postulaciones.', ephemeral: true });
+      return;
+    }
+    const embed = EmbedBuilder.from(interaction.message.embeds[0])
+      .setColor(0xff3333)
+      .setFooter({ text: '❌ Rechazada por ' + (interaction.member.nickname || interaction.user.username) });
     await interaction.message.edit({ embeds: [embed], components: [] });
-    await interaction.reply({ content: 'Postulacion **RECHAZADA** por ' + interaction.user });
+    await interaction.reply({ content: '❌ Postulacion **RECHAZADA** por ' + interaction.user });
     return;
   }
 });
