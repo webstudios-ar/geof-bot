@@ -13,18 +13,15 @@ const GUILD_ID = '1000882508373688331';
 const ROL_MIEMBRO_GEOF = '1474252638832033884';
 
 const ROLES_IDS = [
-  '1474513244084371697', // Duenio GEOF
-  '1459343404155670710', // Director GEOF
-  '1384748336447361085', // Comandante GEOF
-  '1457168018269278402', // Jefe GEOF
-  '1412987223086731336', // Sub Jefe GEOF
+  '1474513244084371697',
+  '1459343404155670710',
+  '1384748336447361085',
+  '1457168018269278402',
+  '1412987223086731336',
 ];
 
 const ROLES_MENCIONES = ROLES_IDS.map(id => '<@&' + id + '>').join(' ');
 const userResponses = new Map();
-
-// Guarda el userId del postulante por cada mensaje de postulacion
-const postulantesMap = new Map();
 
 client.once(Events.ClientReady, async () => {
   console.log('Bot listo como ' + client.user.tag);
@@ -49,7 +46,6 @@ function getNombre(member) {
 
 client.on(Events.InteractionCreate, async (interaction) => {
 
-  // /setup-geof
   if (interaction.isChatInputCommand() && interaction.commandName === 'setup-geof') {
     const embed = new EmbedBuilder()
       .setTitle('Postulacion al G.E.O.F - Unete a Nuestro Equipo!')
@@ -66,7 +62,6 @@ client.on(Events.InteractionCreate, async (interaction) => {
     return;
   }
 
-  // Boton postular
   if (interaction.isButton() && interaction.customId === 'postular_geof') {
     userResponses.delete(interaction.user.id);
     await interaction.showModal(buildModal('geof_paso1', 'G.E.O.F - Paso 1 de 4', [
@@ -79,7 +74,6 @@ client.on(Events.InteractionCreate, async (interaction) => {
     return;
   }
 
-  // Paso 1 submit
   if (interaction.isModalSubmit() && interaction.customId === 'geof_paso1') {
     userResponses.set(interaction.user.id, {
       paso1: {
@@ -94,7 +88,6 @@ client.on(Events.InteractionCreate, async (interaction) => {
     return;
   }
 
-  // Boton paso 2
   if (interaction.isButton() && interaction.customId === 'geof_abrir2') {
     await interaction.showModal(buildModal('geof_paso2', 'G.E.O.F - Paso 2 de 4', [
       { id: 'no_amenazar', label: 'Por que NO amenazar al sospechoso?', style: 'Paragraph' },
@@ -106,7 +99,6 @@ client.on(Events.InteractionCreate, async (interaction) => {
     return;
   }
 
-  // Paso 2 submit
   if (interaction.isModalSubmit() && interaction.customId === 'geof_paso2') {
     const existing = userResponses.get(interaction.user.id) || {};
     existing.paso2 = {
@@ -121,7 +113,6 @@ client.on(Events.InteractionCreate, async (interaction) => {
     return;
   }
 
-  // Boton paso 3
   if (interaction.isButton() && interaction.customId === 'geof_abrir3') {
     await interaction.showModal(buildModal('geof_paso3', 'G.E.O.F - Paso 3 de 4', [
       { id: 'por_que_geof', label: 'Por que queres ser parte del G.E.O.F?', style: 'Paragraph' },
@@ -131,7 +122,6 @@ client.on(Events.InteractionCreate, async (interaction) => {
     return;
   }
 
-  // Paso 3 submit
   if (interaction.isModalSubmit() && interaction.customId === 'geof_paso3') {
     const existing = userResponses.get(interaction.user.id) || {};
     existing.paso3 = {
@@ -144,7 +134,6 @@ client.on(Events.InteractionCreate, async (interaction) => {
     return;
   }
 
-  // Boton paso 4
   if (interaction.isButton() && interaction.customId === 'geof_abrir4') {
     const modal = new ModalBuilder().setCustomId('geof_paso4').setTitle('G.E.O.F - Paso 4 de 4 (Final)');
     modal.addComponents(
@@ -161,7 +150,6 @@ client.on(Events.InteractionCreate, async (interaction) => {
     return;
   }
 
-  // Paso 4 submit -> enviar postulacion completa
   if (interaction.isModalSubmit() && interaction.customId === 'geof_paso4') {
     const stored = userResponses.get(interaction.user.id);
     if (!stored?.paso1 || !stored?.paso2 || !stored?.paso3) {
@@ -203,7 +191,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
       .setTimestamp();
 
     const canal = await client.channels.fetch(POSTULACIONES_CHANNEL_ID);
-    const msg = await canal.send({
+    await canal.send({
       content: '🔔 Nueva postulacion al G.E.O.F! ' + ROLES_MENCIONES,
       embeds: [embed],
       components: [new ActionRowBuilder().addComponents(
@@ -211,9 +199,6 @@ client.on(Events.InteractionCreate, async (interaction) => {
         new ButtonBuilder().setCustomId('rechazar_' + interaction.user.id).setLabel('❌ Rechazar').setStyle(ButtonStyle.Danger)
       )]
     });
-
-    // Guardar el userId del postulante vinculado al mensaje
-    postulantesMap.set(msg.id, interaction.user.id);
 
     await interaction.reply({ content: '**Postulacion enviada con exito!** El G.E.O.F revisara tu solicitud. Buena suerte!', ephemeral: true });
     return;
@@ -227,32 +212,29 @@ client.on(Events.InteractionCreate, async (interaction) => {
       return;
     }
 
-    // Nombre del que acepta (nombre del servidor)
     const nombreAceptador = getNombre(interaction.member);
-
-    // Obtener el userId del postulante desde el customId del boton
     const postulantUserId = interaction.customId.replace('aceptar_', '');
 
-    // Darle el rol de miembro GEOF al postulante
+    // Buscar al postulante y asignarle el rol
     const guild = interaction.guild;
     const postulanteMember = await guild.members.fetch(postulantUserId).catch(() => null);
-    const nombrePostulante = getNombre(postulanteMember);
 
     if (postulanteMember) {
+      // Asignar rol de miembro GEOF
       await postulanteMember.roles.add(ROL_MIEMBRO_GEOF).catch(err => console.error('Error asignando rol:', err));
     }
 
-    // Editar el embed de la postulacion
+    // Editar embed de postulacion
     const embed = EmbedBuilder.from(interaction.message.embeds[0])
       .setColor(0x00cc44)
       .setFooter({ text: '✅ Aceptada por ' + nombreAceptador });
     await interaction.message.edit({ embeds: [embed], components: [] });
 
-    // Mensaje en canal de updates
+    // Mensaje en canal updates: "@postulante > @rol" (solo menciones, sin texto)
     const updatesCanal = await client.channels.fetch(UPDATES_CHANNEL_ID);
-    await updatesCanal.send('📋 **Update:** ' + nombrePostulante + ' **>** nuevo **miembro G.E.O.F** <@&' + ROL_MIEMBRO_GEOF + '>');
+    await updatesCanal.send('📋 **Update:** <@' + postulantUserId + '> **>** nuevo <@&' + ROL_MIEMBRO_GEOF + '>');
 
-    await interaction.reply({ content: '✅ Postulacion **ACEPTADA**. Rol asignado a ' + nombrePostulante + '.', ephemeral: true });
+    await interaction.reply({ content: '✅ Postulacion **ACEPTADA** por ' + nombreAceptador + '.', ephemeral: true });
     return;
   }
 
@@ -265,7 +247,6 @@ client.on(Events.InteractionCreate, async (interaction) => {
     }
 
     const nombreAceptador = getNombre(interaction.member);
-
     const embed = EmbedBuilder.from(interaction.message.embeds[0])
       .setColor(0xff3333)
       .setFooter({ text: '❌ Rechazada por ' + nombreAceptador });
