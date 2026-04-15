@@ -23,6 +23,7 @@ const client = new Client({
 });
 
 const POSTULACIONES_CHANNEL_ID = '1493831725212635266';
+const GUILD_ID = '1000882508373688331';
 
 const ROLES_PERMITIDOS = [
   'jefe geof',
@@ -38,8 +39,8 @@ client.once(Events.ClientReady, async () => {
   const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
   const commands = [{ name: 'setup-geof', description: 'Envia el panel de postulacion al G.E.O.F en este canal' }];
   try {
-    await rest.put(Routes.applicationCommands(client.user.id), { body: commands });
-    console.log('Comandos slash registrados');
+    await rest.put(Routes.applicationGuildCommands(client.user.id, GUILD_ID), { body: commands });
+    console.log('Comandos slash registrados para el servidor');
   } catch (err) {
     console.error('Error registrando comandos:', err);
   }
@@ -69,7 +70,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
       new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('rango_pfa').setLabel('Rango actual en la PFA').setStyle(TextInputStyle.Short).setRequired(true)),
       new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('dias_semana').setLabel('Dias disponibles por semana').setStyle(TextInputStyle.Short).setRequired(true).setPlaceholder('Ej: Lunes, Miercoles, Viernes')),
       new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('diferencia').setLabel('Que te diferencia de otros postulantes?').setStyle(TextInputStyle.Paragraph).setRequired(true)),
-      new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('nvl').setLabel('Que es el NVL? (no valorar vida) + ejemplo').setStyle(TextInputStyle.Paragraph).setRequired(true).setPlaceholder('Explica que es el NVL y da un ejemplo'))
+      new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('nvl').setLabel('Que es el NVL? (no valorar vida) + ejemplo').setStyle(TextInputStyle.Paragraph).setRequired(true))
     );
     await interaction.showModal(modal);
     return;
