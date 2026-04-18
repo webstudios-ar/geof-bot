@@ -31,17 +31,60 @@ const userResponses = new Map();
 // Asistentes por operacion: { messageId: [userId, ...] }
 const asistentesGeof = {};
 
+async function guardarAsistentesGeof() {
+  try {
+    const resSha = await fetch('https://api.github.com/repos/webstudios-ar/geof-bot/contents/asistentes.json', {
+      headers: { 'Authorization': 'Bearer ' + process.env.GITHUB_TOKEN, 'Accept': 'application/vnd.github+json' }
+    });
+    const sha = resSha.status !== 404 ? (await resSha.json()).sha : null;
+    const content = Buffer.from(JSON.stringify(asistentesGeof, null, 2)).toString('base64');
+    const body = { message: 'update asistentes', content };
+    if (sha) body.sha = sha;
+    await fetch('https://api.github.com/repos/webstudios-ar/geof-bot/contents/asistentes.json', {
+      method: 'PUT',
+      headers: { 'Authorization': 'Bearer ' + process.env.GITHUB_TOKEN, 'Accept': 'application/vnd.github+json', 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+  } catch (err) { console.error('Error guardando asistentes:', err.message); }
+}
+
+async function cargarAsistentesGeof() {
+  try {
+    const res = await fetch('https://api.github.com/repos/webstudios-ar/geof-bot/contents/asistentes.json', {
+      headers: { 'Authorization': 'Bearer ' + process.env.GITHUB_TOKEN, 'Accept': 'application/vnd.github+json' }
+    });
+    if (res.status === 404) return;
+    const data = await res.json();
+    const loaded = JSON.parse(Buffer.from(data.content, 'base64').toString('utf8'));
+    Object.assign(asistentesGeof, loaded);
+    console.log('Asistentes cargados:', Object.keys(asistentesGeof).length, 'operaciones');
+  } catch (err) { console.error('Error cargando asistentes:', err.message); }
+}
+
 // Imagenes pendientes para galeria
 const fecha = () => new Date().toLocaleString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 
 client.once(Events.ClientReady, async () => {
   console.log('Bot listo como ' + client.user.tag);
+  await cargarAsistentesGeof();
   const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
   try {
     await rest.put(Routes.applicationGuildCommands(client.user.id, GUILD_ID), {
       body: [
         { name: 'setup-geof', description: 'Envia el panel de postulacion al G.E.O.F' },
         { name: 'operacion', description: 'Anuncia una operacion del G.E.O.F' },
+        { name: 'expulsar-geof', description: '[SOLO HEAD] Expulsa a un miembro del G.E.O.F', options: [
+          { name: 'usuario', description: 'El usuario a expulsar', type: 6, required: true },
+          { name: 'motivo', description: 'Motivo de la expulsion', type: 3, required: true }
+        ]},
+        {
+          name: 'expulsar',
+          description: 'Expulsa a un miembro del G.E.O.F',
+          options: [
+            { name: 'usuario', description: 'El usuario a expulsar', type: 6, required: true },
+            { name: 'motivo', description: 'Motivo de la expulsion', type: 3, required: true }
+          ]
+        },
       ]
     });
     console.log('Comandos registrados');
@@ -124,6 +167,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
       }
 
       asistentesGeof[msgId].push(interaction.user.id);
+      await guardarAsistentesGeof();
       const lista = asistentesGeof[msgId].map(uid => '<@' + uid + '>').join('\n');
 
       const msgOriginal = interaction.message;
@@ -218,6 +262,58 @@ client.on(Events.InteractionCreate, async (interaction) => {
   // ===== SLASH COMMANDS =====
   if (interaction.isChatInputCommand()) {
 
+    // /expulsar
+    if (interaction.commandName === 'expulsar-geof') {
+      const tieneRol = interaction.member.roles.cache.some(r => ROLES_IDS.includes(r.id));
+      if (!tieneRol) {
+        await interaction.reply({ content: '❌ No tenés permisos para expulsar miembros.', ephemeral: true });
+        return;
+      }
+
+      const usuario  = interaction.options.getUser('usuario');
+      const motivo   = interaction.options.getString('motivo');
+      const miembro  = await interaction.guild.members.fetch(usuario.id);
+
+      // Verificar que no sea el Dueño
+      const ROL_DUENO = '1474513244084371697';
+      if (miembro.roles.cache.has(ROL_DUENO)) {
+        await interaction.reply({ content: '❌ No podés expulsar al **Dueño** del G.E.O.F.', ephemeral: true });
+        return;
+      }
+
+      // Quitar todos los roles de Geof
+      const TODOS_ROLES_GEOF = [
+        '1384737385551495178',
+        '1474513244084371697',
+        '1459343404155670710',
+        '1384748336447361085',
+        '1457168018269278402',
+        '1412987223086731336',
+        '1384748836978823300',
+        '1384748893362983005',
+        '1474252638832033884',
+      ];
+      for (const id of TODOS_ROLES_GEOF) {
+        if (miembro.roles.cache.has(id)) await miembro.roles.remove(id).catch(() => {});
+      }
+
+      // Anunciar en canal de updates
+      const embed = new EmbedBuilder()
+        .setTitle('🚫 EXPULSIÓN — G.E.O.F')
+        .setDescription('<@' + usuario.id + '> ha sido **expulsado** del G.E.O.F.')
+        .addFields(
+          { name: '📋 Motivo',        value: motivo,                           inline: false },
+          { name: '👮 Expulsado por', value: '<@' + interaction.user.id + '>', inline: true }
+        )
+        .setColor(0x000000).setThumbnail(usuario.displayAvatarURL()).setTimestamp()
+        .setFooter({ text: 'G.E.O.F  •  Sistema de Expulsiones' });
+
+      const updatesCanal = await client.channels.fetch(UPDATES_CHANNEL_ID);
+      await updatesCanal.send({ embeds: [embed] });
+      await interaction.reply({ content: '✅ **' + miembro.displayName + '** fue expulsado del G.E.O.F.', ephemeral: true });
+      return;
+    }
+
     // /setup-geof
     if (interaction.commandName === 'setup-geof') {
       const embed = new EmbedBuilder()
@@ -229,6 +325,42 @@ client.on(Events.InteractionCreate, async (interaction) => {
       await interaction.reply({ embeds: [embed], components: [new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId('postular_geof').setLabel('Enviar postulacion').setStyle(ButtonStyle.Primary)
       )] });
+      return;
+    }
+
+    // /expulsar
+    if (interaction.commandName === 'expulsar-geof') {
+      const tieneRol = interaction.member.roles.cache.some(r => ROLES_IDS.includes(r.id));
+      if (!tieneRol) { await interaction.reply({ content: '❌ No tenés permisos para expulsar miembros.', ephemeral: true }); return; }
+
+      const usuario = interaction.options.getUser('usuario');
+      const motivo  = interaction.options.getString('motivo');
+      const miembro = await interaction.guild.members.fetch(usuario.id).catch(() => null);
+
+      if (!miembro) { await interaction.reply({ content: '❌ No se encontró al usuario.', ephemeral: true }); return; }
+
+      try {
+        // Quitar rol de miembro Geof
+        if (miembro.roles.cache.has(ROL_MIEMBRO_GEOF)) await miembro.roles.remove(ROL_MIEMBRO_GEOF);
+
+        // Anunciar en #updates
+        const updatesCanal = await client.channels.fetch(UPDATES_CHANNEL_ID);
+        const embed = new EmbedBuilder()
+          .setTitle('🚫 EXPULSIÓN — G.E.O.F')
+          .setDescription('<@' + usuario.id + '> ha sido **expulsado** del G.E.O.F.')
+          .addFields(
+            { name: '📋 Motivo',        value: motivo,                                inline: false },
+            { name: '👮 Expulsado por', value: '<@' + interaction.user.id + '>',      inline: true }
+          )
+          .setColor(0x000000).setThumbnail(usuario.displayAvatarURL()).setTimestamp()
+          .setFooter({ text: 'G.E.O.F  •  Sistema de Expulsiones' });
+
+        await updatesCanal.send({ embeds: [embed] });
+        await interaction.reply({ content: '✅ **' + miembro.displayName + '** fue expulsado del G.E.O.F.', ephemeral: true });
+      } catch (err) {
+        console.error(err);
+        await interaction.reply({ content: '❌ Error al expulsar al miembro.', ephemeral: true });
+      }
       return;
     }
 
