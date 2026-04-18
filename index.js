@@ -264,6 +264,11 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
     // /expulsar
     if (interaction.commandName === 'expulsar-geof') {
+      // Solo funciona en el canal de updates
+      if (interaction.channelId !== '1493838384416952392') {
+        await interaction.reply({ content: '❌ Este comando solo puede usarse en el canal de updates.', ephemeral: true });
+        return;
+      }
       const tieneRol = interaction.member.roles.cache.some(r => ROLES_IDS.includes(r.id));
       if (!tieneRol) {
         await interaction.reply({ content: '❌ No tenés permisos para expulsar miembros.', ephemeral: true });
@@ -366,6 +371,11 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
     // /operacion
     if (interaction.commandName === 'operacion') {
+      // Solo funciona en el canal de anuncios
+      if (interaction.channelId !== '1460759129864929507') {
+        await interaction.reply({ content: '❌ Este comando solo puede usarse en el canal de anuncios.', ephemeral: true });
+        return;
+      }
       const tieneRol = interaction.member.roles.cache.some(r => ROLES_OPERACION.includes(r.id));
       if (!tieneRol) {
         await interaction.reply({ content: '❌ No tenés permisos para anunciar operaciones.', ephemeral: true });
