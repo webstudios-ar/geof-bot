@@ -341,48 +341,81 @@ client.on('interactionCreate', async (interaction) => {
     postulacionesActivas[uid].datos.situacion = interaction.fields.getTextInputValue('m4_situacion');
 
     const d = postulacionesActivas[uid].datos;
-    if (postulacionesActivas[uid].timeoutId) clearTimeout(postulacionesActivas[uid].timeoutId);
-    delete postulacionesActivas[uid];
-    guardarPostulacionesActivas().catch(e => console.error('Save error:', e.message));
 
-    // Construir embed consolidado para HEAD GEOF
-    const embed = new EmbedBuilder()
-      .setTitle('🎯 NUEVO EXAMEN DE INGRESO — G.E.O.F 🎯')
+    // Helper para valores con default
+    const sf = (v, max = 1024) => {
+      const s = (v || '_(vacío)_').toString();
+      return s.length > max ? s.slice(0, max - 3) + '...' : s;
+    };
+
+    // Truncar a 400 chars por campo largo para no pasar el límite de 6000 chars totales de Discord
+    const MAX_CAMPO = 400;
+
+    // Embed 1: Datos generales + Táctica parte 1
+    const embed1 = new EmbedBuilder()
+      .setTitle('🎯 NUEVO EXAMEN DE INGRESO — G.E.O.F (1/2) 🎯')
       .setColor(COLOR_GEOF)
       .setThumbnail(interaction.user.displayAvatarURL())
       .addFields(
-        { name: '👤 Nombre IC',       value: d.nombre,   inline: true },
-        { name: '🎖️ Rango PFA',       value: d.rango,    inline: true },
-        { name: '📅 Disponibilidad',  value: d.disp,     inline: true },
-        { name: '🔗 Discord',         value: '<@' + uid + '>',            inline: true },
-        { name: '🆔 Discord ID',      value: '`' + uid + '`',             inline: true },
+        { name: '👤 Nombre IC',       value: sf(d.nombre, 60),   inline: true },
+        { name: '🎖️ Rango PFA',       value: sf(d.rango, 60),    inline: true },
+        { name: '📅 Disponibilidad',  value: sf(d.disp, 60),     inline: true },
+        { name: '🔗 Discord',         value: '<@' + uid + '>',   inline: true },
+        { name: '🆔 Discord ID',      value: '`' + uid + '`',    inline: true },
         { name: '\u200B', value: '\u200B', inline: true },
-        { name: '💬 Diferencia con otros', value: d.diferencia.slice(0, 1024), inline: false },
-        { name: '📖 NVL + ejemplo', value: d.nvl.slice(0, 1024), inline: false },
-        { name: '🚫 Por qué NO amenazar', value: d.no_amenazar.slice(0, 1024), inline: false },
-        { name: '🎭 Toma de rehenes', value: d.rehenes.slice(0, 1024), inline: false },
-        { name: '⚠️ Secuestro', value: d.secuestro.slice(0, 1024), inline: false },
-        { name: '🚪 Ingreso táctico', value: d.ingreso.slice(0, 1024), inline: false },
-        { name: '📍 Perímetro (armado)', value: d.perimetro.slice(0, 1024), inline: false },
-        { name: '❓ ¿Por qué G.E.O.F?', value: d.por_que.slice(0, 1024), inline: false },
-        { name: '⚙️ Órdenes vs iniciativa', value: d.iniciativa.slice(0, 1024), inline: false },
-        { name: '🗣️ ¿Quién negocia?', value: d.negociador.slice(0, 1024), inline: false },
-        { name: '🎬 Situación táctica final', value: d.situacion.slice(0, 1024), inline: false }
+        { name: '💬 Diferencia con otros', value: sf(d.diferencia, MAX_CAMPO), inline: false },
+        { name: '📖 NVL + ejemplo', value: sf(d.nvl, MAX_CAMPO), inline: false },
+        { name: '🚫 Por qué NO amenazar', value: sf(d.no_amenazar, MAX_CAMPO), inline: false },
+        { name: '🎭 Toma de rehenes', value: sf(d.rehenes, MAX_CAMPO), inline: false },
+        { name: '⚠️ Secuestro', value: sf(d.secuestro, MAX_CAMPO), inline: false },
+        { name: '🚪 Ingreso táctico', value: sf(d.ingreso, MAX_CAMPO), inline: false }
+      )
+      .setFooter({ text: 'G.E.O.F • Parte 1 de 2' });
+
+    // Embed 2: Táctica parte 2 + Motivación + Situación
+    const embed2 = new EmbedBuilder()
+      .setTitle('🎯 EXAMEN DE INGRESO — G.E.O.F (2/2) 🎯')
+      .setColor(COLOR_GEOF)
+      .addFields(
+        { name: '📍 Perímetro (armado)', value: sf(d.perimetro, MAX_CAMPO), inline: false },
+        { name: '❓ ¿Por qué G.E.O.F?', value: sf(d.por_que, MAX_CAMPO), inline: false },
+        { name: '⚙️ Órdenes vs iniciativa', value: sf(d.iniciativa, MAX_CAMPO), inline: false },
+        { name: '🗣️ ¿Quién negocia?', value: sf(d.negociador, MAX_CAMPO), inline: false },
+        { name: '🎬 Situación táctica final', value: sf(d.situacion, MAX_CAMPO), inline: false }
       )
       .setTimestamp()
       .setFooter({ text: 'G.E.O.F • Sistema de Postulaciones' });
 
     const mencionRoles = ROLES_AUTORIZADOS.map(r => '<@&' + r + '>').join(' ');
-    const nombreLimpio = d.nombre.replace(/[^a-zA-Z0-9]/g, '') || 'postulante';
+    const nombreLimpio = (d.nombre || 'postulante').replace(/[^a-zA-Z0-9]/g, '').slice(0, 30) || 'postulante';
     const row = new ActionRowBuilder().addComponents(
       new ButtonBuilder().setCustomId('ap_' + Date.now() + '_' + nombreLimpio + '_' + uid).setLabel('APROBAR').setStyle(ButtonStyle.Success),
       new ButtonBuilder().setCustomId('re_' + Date.now() + '_' + nombreLimpio + '_' + uid).setLabel('RECHAZAR').setStyle(ButtonStyle.Danger)
     );
 
+    // Intentar enviar los embeds — si falla, NO borrar el estado
     try {
       const canalAprob = await client.channels.fetch(CANAL_APROBACION);
-      await canalAprob.send({ content: mencionRoles, embeds: [embed], components: [row], allowedMentions: { roles: ROLES_AUTORIZADOS } });
-    } catch (e) { console.error('Publicar postulacion:', e.message); }
+      await canalAprob.send({
+        content: mencionRoles,
+        embeds: [embed1, embed2],
+        components: [row],
+        allowedMentions: { roles: ROLES_AUTORIZADOS }
+      });
+    } catch (e) {
+      console.error('[POSTULAR MODAL 4] Error publicando postulación:', e);
+      // NO borramos el estado — el usuario puede reintentar
+      await interaction.reply({
+        content: '❌ **Hubo un error al enviar tu postulación.** Tus respuestas están guardadas. Volvé a intentar apretando el botón "🎯 POSTULARSE" del panel.\n\n_Error: ' + (e.message || 'desconocido') + '_',
+        ephemeral: true
+      });
+      return;
+    }
+
+    // Solo si el envío fue OK, borrar el estado
+    if (postulacionesActivas[uid] && postulacionesActivas[uid].timeoutId) clearTimeout(postulacionesActivas[uid].timeoutId);
+    delete postulacionesActivas[uid];
+    guardarPostulacionesActivas().catch(e => console.error('Save error:', e.message));
 
     await interaction.reply({ content: '✅ **Tu postulación fue enviada correctamente.**\n\nLa oficialidad del G.E.O.F revisará tu examen y te avisará por mensaje privado si es aprobada o rechazada.\n\n_— G.E.O.F • Grupo Especial de Operaciones Federales_', ephemeral: true });
     return;
