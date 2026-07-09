@@ -6,7 +6,12 @@
       "nombre": "aAA",
       "rango": "aAA",
       "disp": "a",
-      "diferencia": "aAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+      "diferencia": "aAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "nvl": "AAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "no_amenazar": "AAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "rehenes": "AAAAAAAAAAAAAAAAAAAAAAA",
+      "secuestro": "AAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "ingreso": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
     }
   }
 }
