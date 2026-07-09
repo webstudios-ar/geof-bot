@@ -1,132 +1,116 @@
 require('dotenv').config();
 const { Client, GatewayIntentBits, ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, REST, Routes, SlashCommandBuilder, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
 
-// Manejo global de errores para que un crash no tumbe el proceso
-process.on('unhandledRejection', (err) => {
-  console.error('[GLOBAL] Unhandled promise rejection:', err);
-});
-process.on('uncaughtException', (err) => {
-  console.error('[GLOBAL] Uncaught exception:', err);
-});
+process.on('unhandledRejection', (err) => console.error('[GLOBAL] Unhandled promise rejection:', err));
+process.on('uncaughtException', (err) => console.error('[GLOBAL] Uncaught exception:', err));
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent, GatewayIntentBits.GuildMembers] });
 
-// ==================== CONSTANTES ====================
+// ==================== CONFIGURACIÓN ====================
 const GITHUB_REPO       = 'webstudios-ar/geof-bot';
 
-const CANAL_PANEL       = '1523832372062326944';   // panel con botón POSTULARSE
-const CANAL_APROBACION  = '1523833135656210462';   // donde llegan postulaciones para HEAD GEOF
-const CANAL_UPDATES     = '1493838384416952392';   // ingresos, ascensos, expulsiones
-const CANAL_OPERATIVOS  = '1460758338387050550';   // operativos con "Me anoto"
+const CANAL_PANEL       = '1523832372062326944';
+const CANAL_APROBACION  = '1523833135656210462';
+const CANAL_UPDATES     = '1493838384416952392';
+const CANAL_OPERATIVOS  = '1460758338387050550';
 
-const ROL_GEOF          = '1384737385551495178';   // rol grupal GEOF
-const ROL_TACTICO       = '1412986446599557170';   // rol táctico
-const ROL_MIEMBRO_GEOF  = '1474252638832033884';   // miembro GEOF
-const ROL_DUENO_GEOF    = '1474513244084371697';   // dueño GEOF
+const ROL_GEOF          = '1384737385551495178';
+const ROL_TACTICO       = '1412986446599557170';
+const ROL_MIEMBRO_GEOF  = '1474252638832033884';
+const ROL_DUENO_GEOF    = '1474513244084371697';
 
-// HEAD GEOF: autorizados a aprobar/rechazar postulaciones
 const ROLES_AUTORIZADOS = [
-  '1474513244084371697', // Dueño GEOF
+  '1474513244084371697',
   '1459343404155670710',
   '1384748336447361085',
   '1457168018269278402',
   '1412987223086731336'
 ];
 
-// Todos los roles GEOF (usados en /geof expulsar para removerlos)
 const TODOS_ROLES_GEOF = [
-  '1384737385551495178', // rol GEOF grupal
-  '1412986446599557170', // rol táctico
-  '1474252638832033884', // miembro GEOF
-  '1474513244084371697', // dueño GEOF
+  '1384737385551495178',
+  '1412986446599557170',
+  '1474252638832033884',
+  '1474513244084371697',
   '1459343404155670710',
   '1384748336447361085',
   '1457168018269278402',
   '1412987223086731336'
 ];
 
-// Anti-copia
-const TIEMPO_MAX_POSTULACION_MS = 15 * 60 * 1000;      // 15 minutos para completar
-const COOLDOWN_POSTULACION_MS   = 24 * 60 * 60 * 1000; // 24 horas post rechazo/timeout
+const TIEMPO_MAX_POSTULACION_MS = 15 * 60 * 1000;
+const COOLDOWN_POSTULACION_MS   = 24 * 60 * 60 * 1000;
 
-// Color base para embeds (negro táctico GEOF)
-const COLOR_GEOF        = 0x1C1C1C;
-const COLOR_GEOF_APROBAR = 0xB8860B;                    // dorado apagado (aprobación)
-const COLOR_GEOF_RECHAZAR = 0x8B0000;                   // rojo oscuro (rechazo)
-const COLOR_GEOF_ALERTA = 0xCC2222;                     // rojo alerta (operativos)
+// ==================== PALETA VISUAL ====================
+const COLOR = {
+  BASE:        0x2C2F33, // negro grafito (panel base, info neutra)
+  PENDIENTE:   0xE67E22, // naranja alerta (postulación pendiente)
+  APROBADO:    0xD4AC0D, // dorado militar (aprobación, ingreso)
+  RECHAZADO:   0xC0392B, // rojo carmesí (rechazo)
+  EXPULSION:   0x1C1C1C, // negro puro (expulsión)
+  OPERATIVO:   0xE74C3C, // rojo alerta operativa
+  EXITO:       0x27AE60, // verde éxito (paso completado)
+  ADVERTENCIA: 0xF39C12, // ámbar (aviso)
+  INFO:        0x3498DB  // azul acero (info general)
+};
 
-// ==================== ESTADO EN MEMORIA ====================
-const asistentes = {}; // { messageId: [userId, ...] }
-// Postulaciones en curso: { userId: { inicio, expiraTs, timeoutId, datos: {...} } }
+const DIV = '━━━━━━━━━━━━━━━━━━━━━━━';
+const SEP = '▸';
+
+// ==================== ESTADO ====================
+const asistentes = {};
 const postulacionesActivas = {};
-// Cooldowns tras rechazo o timeout, persistido: { userId: expiraTs }
 let postulacionesCooldown = {};
+let expedienteCounter = 0;
 let botListo = false;
 
-const fecha = () => new Date().toLocaleString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+const fechaCorta = () => new Date().toLocaleString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+const generarExpediente = () => {
+  expedienteCounter = (expedienteCounter + 1) % 10000;
+  const num = String(expedienteCounter).padStart(4, '0');
+  const year = new Date().getFullYear();
+  return `PST-${num}-${year}`;
+};
 
 // ==================== PERSISTENCIA ====================
-async function guardarAsistentes() {
+async function guardarJson(archivo, data, mensaje) {
   try {
-    const res = await fetch('https://api.github.com/repos/' + GITHUB_REPO + '/contents/asistentes.json', {
+    const res = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/contents/${archivo}`, {
       headers: { 'Authorization': 'Bearer ' + process.env.GITHUB_TOKEN, 'Accept': 'application/vnd.github+json' }
     });
     const sha = res.status !== 404 ? (await res.json()).sha : null;
-    const content = Buffer.from(JSON.stringify(asistentes, null, 2)).toString('base64');
-    const body = { message: 'update asistentes', content };
+    const content = Buffer.from(JSON.stringify(data, null, 2)).toString('base64');
+    const body = { message: mensaje || `update ${archivo}`, content };
     if (sha) body.sha = sha;
-    await fetch('https://api.github.com/repos/' + GITHUB_REPO + '/contents/asistentes.json', {
+    await fetch(`https://api.github.com/repos/${GITHUB_REPO}/contents/${archivo}`, {
       method: 'PUT',
       headers: { 'Authorization': 'Bearer ' + process.env.GITHUB_TOKEN, 'Accept': 'application/vnd.github+json', 'Content-Type': 'application/json' },
       body: JSON.stringify(body)
     });
-  } catch (err) { console.error('Error guardando asistentes:', err.message); }
+  } catch (err) { console.error(`Error guardando ${archivo}:`, err.message); }
 }
-
-async function cargarAsistentes() {
+async function cargarJson(archivo) {
   try {
-    const res = await fetch('https://api.github.com/repos/' + GITHUB_REPO + '/contents/asistentes.json', {
+    const res = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/contents/${archivo}`, {
       headers: { 'Authorization': 'Bearer ' + process.env.GITHUB_TOKEN, 'Accept': 'application/vnd.github+json' }
     });
-    if (res.status === 404) return;
+    if (res.status === 404) return null;
     const data = await res.json();
-    const loaded = JSON.parse(Buffer.from(data.content, 'base64').toString('utf8'));
-    Object.assign(asistentes, loaded);
-    console.log('Asistentes cargados:', Object.keys(asistentes).length, 'operativos');
-  } catch (err) { console.error('Error cargando asistentes:', err.message); }
+    return JSON.parse(Buffer.from(data.content, 'base64').toString('utf8'));
+  } catch (err) { console.error(`Error cargando ${archivo}:`, err.message); return null; }
 }
 
-// Cooldowns de postulaciones
-async function guardarCooldowns() {
-  try {
-    const res = await fetch('https://api.github.com/repos/' + GITHUB_REPO + '/contents/postulaciones_cooldown.json', {
-      headers: { 'Authorization': 'Bearer ' + process.env.GITHUB_TOKEN, 'Accept': 'application/vnd.github+json' }
-    });
-    const sha = res.status !== 404 ? (await res.json()).sha : null;
-    const content = Buffer.from(JSON.stringify(postulacionesCooldown, null, 2)).toString('base64');
-    const body = { message: 'update cooldowns', content };
-    if (sha) body.sha = sha;
-    await fetch('https://api.github.com/repos/' + GITHUB_REPO + '/contents/postulaciones_cooldown.json', {
-      method: 'PUT',
-      headers: { 'Authorization': 'Bearer ' + process.env.GITHUB_TOKEN, 'Accept': 'application/vnd.github+json', 'Content-Type': 'application/json' },
-      body: JSON.stringify(body)
-    });
-  } catch (err) { console.error('Error guardando cooldowns:', err.message); }
+const guardarAsistentes = () => guardarJson('asistentes.json', asistentes, 'update asistentes');
+const guardarCooldowns = () => guardarJson('postulaciones_cooldown.json', postulacionesCooldown, 'update cooldowns');
+
+async function guardarPostulacionesActivas() {
+  const serializable = {};
+  for (const [uid, data] of Object.entries(postulacionesActivas)) {
+    serializable[uid] = { inicio: data.inicio, expiraTs: data.expiraTs, expediente: data.expediente, datos: data.datos };
+  }
+  await guardarJson('postulaciones_activas.json', serializable, 'update postulaciones activas');
 }
 
-async function cargarCooldowns() {
-  try {
-    const res = await fetch('https://api.github.com/repos/' + GITHUB_REPO + '/contents/postulaciones_cooldown.json', {
-      headers: { 'Authorization': 'Bearer ' + process.env.GITHUB_TOKEN, 'Accept': 'application/vnd.github+json' }
-    });
-    if (res.status === 404) return;
-    const data = await res.json();
-    postulacionesCooldown = JSON.parse(Buffer.from(data.content, 'base64').toString('utf8'));
-    console.log('Cooldowns cargados:', Object.keys(postulacionesCooldown).length, 'usuarios');
-  } catch (err) { console.error('Error cargando cooldowns:', err.message); }
-}
-
-// Verifica si un usuario está en cooldown
 function estaEnCooldown(userId) {
   const c = postulacionesCooldown[userId];
   if (!c) return null;
@@ -138,7 +122,6 @@ function estaEnCooldown(userId) {
   return c;
 }
 
-// Iniciar timeout de 15 min para una postulación
 function iniciarTimeoutPostulacion(userId) {
   const p = postulacionesActivas[userId];
   if (!p) return;
@@ -146,161 +129,138 @@ function iniciarTimeoutPostulacion(userId) {
   const restanteMs = Math.max(0, p.expiraTs - Date.now());
   p.timeoutId = setTimeout(async () => {
     if (!postulacionesActivas[userId]) return;
+    const exp = postulacionesActivas[userId].expediente;
     delete postulacionesActivas[userId];
     guardarPostulacionesActivas().catch(e => console.error('Save error:', e.message));
-    // Aplicar cooldown de 24hs por no terminar a tiempo
     postulacionesCooldown[userId] = Date.now() + COOLDOWN_POSTULACION_MS;
     guardarCooldowns().catch(e => console.error('Save cooldowns error:', e.message));
-    // Intentar avisar por DM
     try {
       const guild = client.guilds.cache.first();
       if (guild) {
         const m = await guild.members.fetch(userId).catch(() => null);
         if (m) {
-          await m.send({ content: '⏱️ **Se te venció el tiempo del examen de G.E.O.F.**\n\nTenías 15 minutos para completarlo. Podés volver a intentar en **24 horas**.' }).catch(() => {});
+          const embed = new EmbedBuilder()
+            .setAuthor({ name: 'G.E.O.F • Sistema de Postulaciones' })
+            .setTitle('⏱️ Tiempo agotado')
+            .setDescription(`Tu expediente **\`${exp}\`** fue cerrado por vencimiento de tiempo.\n\nTeniías **15 minutos** para completar el examen. Podés volver a postularte en **24 horas**.`)
+            .setColor(COLOR.RECHAZADO)
+            .setFooter({ text: 'G.E.O.F • Kilombo RP' })
+            .setTimestamp();
+          await m.send({ embeds: [embed] }).catch(() => {});
         }
       }
     } catch (e) { /* ignorar */ }
   }, restanteMs);
 }
 
-// Persistir postulaciones activas (sin timeoutId porque no es serializable)
-async function guardarPostulacionesActivas() {
-  try {
-    const serializable = {};
-    for (const [uid, data] of Object.entries(postulacionesActivas)) {
-      serializable[uid] = {
-        inicio: data.inicio,
-        expiraTs: data.expiraTs,
-        datos: data.datos
+async function cargarPostulacionesActivas() {
+  const loaded = await cargarJson('postulaciones_activas.json');
+  if (!loaded) return;
+  const ahora = Date.now();
+  for (const [uid, p] of Object.entries(loaded)) {
+    if (p.expiraTs > ahora) {
+      postulacionesActivas[uid] = {
+        inicio: p.inicio,
+        expiraTs: p.expiraTs,
+        expediente: p.expediente || generarExpediente(),
+        timeoutId: null,
+        datos: p.datos || {}
       };
+      iniciarTimeoutPostulacion(uid);
     }
-    const res = await fetch('https://api.github.com/repos/' + GITHUB_REPO + '/contents/postulaciones_activas.json', {
-      headers: { 'Authorization': 'Bearer ' + process.env.GITHUB_TOKEN, 'Accept': 'application/vnd.github+json' }
-    });
-    const sha = res.status !== 404 ? (await res.json()).sha : null;
-    const content = Buffer.from(JSON.stringify(serializable, null, 2)).toString('base64');
-    const body = { message: 'update postulaciones activas', content };
-    if (sha) body.sha = sha;
-    await fetch('https://api.github.com/repos/' + GITHUB_REPO + '/contents/postulaciones_activas.json', {
-      method: 'PUT',
-      headers: { 'Authorization': 'Bearer ' + process.env.GITHUB_TOKEN, 'Accept': 'application/vnd.github+json', 'Content-Type': 'application/json' },
-      body: JSON.stringify(body)
-    });
-  } catch (err) { console.error('Error guardando postulaciones activas:', err.message); }
+  }
+  console.log('Postulaciones activas restauradas:', Object.keys(postulacionesActivas).length);
 }
 
-async function cargarPostulacionesActivas() {
-  try {
-    const res = await fetch('https://api.github.com/repos/' + GITHUB_REPO + '/contents/postulaciones_activas.json', {
-      headers: { 'Authorization': 'Bearer ' + process.env.GITHUB_TOKEN, 'Accept': 'application/vnd.github+json' }
-    });
-    if (res.status === 404) return;
-    const data = await res.json();
-    const loaded = JSON.parse(Buffer.from(data.content, 'base64').toString('utf8'));
-    const ahora = Date.now();
-    for (const [uid, p] of Object.entries(loaded)) {
-      if (p.expiraTs > ahora) {
-        postulacionesActivas[uid] = {
-          inicio: p.inicio,
-          expiraTs: p.expiraTs,
-          timeoutId: null,
-          datos: p.datos || {}
-        };
-        iniciarTimeoutPostulacion(uid);
-      }
-    }
-    console.log('Postulaciones activas restauradas:', Object.keys(postulacionesActivas).length);
-  } catch (err) { console.error('Error cargando postulaciones activas:', err.message); }
-}
+// ==================== HELPERS DE EMBED ====================
+const trunc = (s, max = 400) => {
+  const t = (s || '_—_').toString();
+  return t.length > max ? t.slice(0, max - 3) + '...' : t;
+};
+const embedBase = (color = COLOR.BASE) => new EmbedBuilder().setColor(color).setFooter({ text: 'G.E.O.F • Grupo Especial de Operaciones Federales' });
 
 // ==================== READY ====================
 client.once('ready', async () => {
   console.log('Bot conectado: ' + client.user.tag);
-  await cargarAsistentes();
-  await cargarCooldowns();
+  const asist = await cargarJson('asistentes.json');
+  if (asist) Object.assign(asistentes, asist);
+  console.log('Asistentes cargados:', Object.keys(asistentes).length);
+  const cool = await cargarJson('postulaciones_cooldown.json');
+  if (cool) postulacionesCooldown = cool;
+  console.log('Cooldowns cargados:', Object.keys(postulacionesCooldown).length);
   await cargarPostulacionesActivas();
   botListo = true;
   console.log('[BOT] Todos los datos cargados. Bot listo para recibir comandos.');
 
-  // Comando maestro /geof con TODOS los subcomandos
   const geofCmd = new SlashCommandBuilder()
     .setName('geof')
     .setDescription('Comandos del Grupo G.E.O.F')
-
     .addSubcommand(s => s.setName('nuevo').setDescription('[HEAD] Ingresa un nuevo miembro al G.E.O.F')
       .addUserOption(o => o.setName('usuario').setDescription('El usuario a ingresar').setRequired(true)))
-
     .addSubcommand(s => s.setName('operativo').setDescription('[HEAD] Anuncia un operativo del G.E.O.F'))
-
     .addSubcommand(s => s.setName('expulsar').setDescription('[HEAD] Expulsa a un miembro del G.E.O.F')
       .addUserOption(o => o.setName('usuario').setDescription('El usuario a expulsar').setRequired(true))
       .addStringOption(o => o.setName('motivo').setDescription('Motivo de la expulsión').setRequired(true)))
-
-    .addSubcommand(s => s.setName('panel-postulaciones').setDescription('[HEAD] Publica el panel con el botón para postularse'));
-
-  const commands = [geofCmd.toJSON()];
+    .addSubcommand(s => s.setName('panel-postulaciones').setDescription('[HEAD] Publica el panel de convocatoria'));
 
   const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
   try {
-    await rest.put(Routes.applicationCommands(client.user.id), { body: commands });
-    console.log('Comandos registrados.');
+    await rest.put(Routes.applicationCommands(client.user.id), { body: [geofCmd.toJSON()] });
+    console.log('Comandos registrados (viejos borrados).');
   } catch (err) { console.error('Error registrando comandos:', err); }
 });
 
 // ==================== INTERACTIONS ====================
 client.on('interactionCreate', async (interaction) => {
-  // Log de diagnóstico
   const tipo = interaction.isChatInputCommand() ? 'SLASH:' + interaction.commandName + (interaction.options.getSubcommand(false) ? '/' + interaction.options.getSubcommand(false) : '')
     : interaction.isButton() ? 'BUTTON:' + interaction.customId
-    : interaction.isModalSubmit() ? 'MODAL:' + interaction.customId
-    : 'OTHER';
-  console.log('[INTERACTION] ' + tipo + ' por ' + interaction.user.tag + ' en canal ' + interaction.channelId);
+    : interaction.isModalSubmit() ? 'MODAL:' + interaction.customId : 'OTHER';
+  console.log('[INTERACTION] ' + tipo + ' por ' + interaction.user.tag);
 
-  // Bloquear interacciones hasta que el bot haya cargado todos los datos
   if (!botListo) {
-    console.warn('[INTERACTION] Rechazada — bot no listo aún');
     try {
-      if (interaction.isRepliable()) {
-        await interaction.reply({ content: '⏳ El bot todavía está cargando datos. Esperá unos segundos e intentá de nuevo.', ephemeral: true });
-      }
-    } catch (e) { /* ignorar */ }
+      if (interaction.isRepliable()) await interaction.reply({ content: '⏳ El bot está iniciando. Intentá en unos segundos.', ephemeral: true });
+    } catch (e) { }
     return;
   }
 
-  // ==================== MODALES DE POSTULACIÓN ====================
+  // ==================== MODAL 1 SUBMIT — DATOS ====================
   if (interaction.isModalSubmit() && interaction.customId === 'POSTULAR_MODAL_1') {
     const uid = interaction.user.id;
     if (!postulacionesActivas[uid]) {
-      await interaction.reply({ content: '❌ Tu postulación se venció. Volvé a arrancar desde el panel.', ephemeral: true });
+      await interaction.reply({ embeds: [embedBase(COLOR.RECHAZADO).setTitle('❌ Expediente inválido').setDescription('Tu postulación ya no está activa. Volvé a iniciarla desde el panel.')], ephemeral: true });
       return;
     }
     const confirm = interaction.fields.getTextInputValue('m1_confirm').trim().toUpperCase();
     if (confirm !== 'ACEPTO') {
-      await interaction.reply({ content: '❌ Debés escribir "ACEPTO" exactamente en el último campo. Volvé a arrancar.', ephemeral: true });
       delete postulacionesActivas[uid];
-      guardarPostulacionesActivas().catch(e => console.error('Save error:', e.message));
+      guardarPostulacionesActivas().catch(e => console.error(e));
+      await interaction.reply({ embeds: [embedBase(COLOR.RECHAZADO).setTitle('❌ Confirmación inválida').setDescription('Debías escribir **`ACEPTO`** exactamente. Tu expediente fue cerrado — volvé a iniciarlo si querés continuar.')], ephemeral: true });
       return;
     }
     postulacionesActivas[uid].datos.nombre     = interaction.fields.getTextInputValue('m1_nombre');
     postulacionesActivas[uid].datos.rango      = interaction.fields.getTextInputValue('m1_rango');
     postulacionesActivas[uid].datos.disp       = interaction.fields.getTextInputValue('m1_disp');
     postulacionesActivas[uid].datos.diferencia = interaction.fields.getTextInputValue('m1_diferencia');
-    guardarPostulacionesActivas().catch(e => console.error('Save error:', e.message));
+    guardarPostulacionesActivas().catch(e => console.error(e));
 
-    const restanteMs = postulacionesActivas[uid].expiraTs - Date.now();
-    const minutos = Math.max(0, Math.ceil(restanteMs / 60000));
+    const minutos = Math.max(0, Math.ceil((postulacionesActivas[uid].expiraTs - Date.now()) / 60000));
+    const embed = embedBase(COLOR.EXITO)
+      .setAuthor({ name: 'G.E.O.F • Sistema de Postulaciones' })
+      .setTitle('✅ Paso 1/4 completado')
+      .setDescription(`Datos personales registrados en tu expediente **\`${postulacionesActivas[uid].expediente}\`**.\n\n${DIV}\n\n**Siguiente paso:** Evaluación Táctica — Parte I\n**Tiempo restante:** ⏳ **${minutos} minutos**`);
     const row = new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId('POSTULAR_SIG_2').setLabel('Continuar (2/4) — Táctica').setStyle(ButtonStyle.Primary)
+      new ButtonBuilder().setCustomId('POSTULAR_SIG_2').setLabel('Continuar → Táctica I').setStyle(ButtonStyle.Primary).setEmoji('📖')
     );
-    await interaction.reply({ content: '✅ Datos guardados. Te quedan **' + minutos + ' minutos**.\n\nClick en **Continuar** para responder las preguntas de conocimiento táctico.', components: [row], ephemeral: true });
+    await interaction.reply({ embeds: [embed], components: [row], ephemeral: true });
     return;
   }
 
+  // ==================== MODAL 2 SUBMIT — TÁCTICA I ====================
   if (interaction.isModalSubmit() && interaction.customId === 'POSTULAR_MODAL_2') {
     const uid = interaction.user.id;
     if (!postulacionesActivas[uid]) {
-      await interaction.reply({ content: '❌ Tu postulación se venció. Volvé a arrancar desde el panel.', ephemeral: true });
+      await interaction.reply({ embeds: [embedBase(COLOR.RECHAZADO).setTitle('❌ Expediente inválido').setDescription('Tu postulación ya no está activa.')], ephemeral: true });
       return;
     }
     postulacionesActivas[uid].datos.nvl          = interaction.fields.getTextInputValue('m2_nvl');
@@ -308,128 +268,122 @@ client.on('interactionCreate', async (interaction) => {
     postulacionesActivas[uid].datos.rehenes      = interaction.fields.getTextInputValue('m2_rehenes');
     postulacionesActivas[uid].datos.secuestro    = interaction.fields.getTextInputValue('m2_secuestro');
     postulacionesActivas[uid].datos.ingreso      = interaction.fields.getTextInputValue('m2_ingreso');
-    guardarPostulacionesActivas().catch(e => console.error('Save error:', e.message));
+    guardarPostulacionesActivas().catch(e => console.error(e));
 
-    const restanteMs = postulacionesActivas[uid].expiraTs - Date.now();
-    const minutos = Math.max(0, Math.ceil(restanteMs / 60000));
+    const minutos = Math.max(0, Math.ceil((postulacionesActivas[uid].expiraTs - Date.now()) / 60000));
+    const embed = embedBase(COLOR.EXITO)
+      .setAuthor({ name: 'G.E.O.F • Sistema de Postulaciones' })
+      .setTitle('✅ Paso 2/4 completado')
+      .setDescription(`Evaluación Táctica — Parte I registrada.\n\n${DIV}\n\n**Siguiente paso:** Evaluación Táctica — Parte II\n**Tiempo restante:** ⏳ **${minutos} minutos**`);
     const row = new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId('POSTULAR_SIG_3').setLabel('Continuar (3/4) — Táctica II').setStyle(ButtonStyle.Primary)
+      new ButtonBuilder().setCustomId('POSTULAR_SIG_3').setLabel('Continuar → Táctica II').setStyle(ButtonStyle.Primary).setEmoji('🛡️')
     );
-    await interaction.reply({ content: '✅ Táctica parte 1 guardada. Te quedan **' + minutos + ' minutos**.\n\nClick en **Continuar** para la segunda parte táctica y motivación.', components: [row], ephemeral: true });
+    await interaction.reply({ embeds: [embed], components: [row], ephemeral: true });
     return;
   }
 
+  // ==================== MODAL 3 SUBMIT — TÁCTICA II + MOTIVACIÓN ====================
   if (interaction.isModalSubmit() && interaction.customId === 'POSTULAR_MODAL_3') {
     const uid = interaction.user.id;
     if (!postulacionesActivas[uid]) {
-      await interaction.reply({ content: '❌ Tu postulación se venció. Volvé a arrancar desde el panel.', ephemeral: true });
+      await interaction.reply({ embeds: [embedBase(COLOR.RECHAZADO).setTitle('❌ Expediente inválido').setDescription('Tu postulación ya no está activa.')], ephemeral: true });
       return;
     }
     postulacionesActivas[uid].datos.perimetro    = interaction.fields.getTextInputValue('m3_perimetro');
     postulacionesActivas[uid].datos.por_que      = interaction.fields.getTextInputValue('m3_por_que');
     postulacionesActivas[uid].datos.iniciativa   = interaction.fields.getTextInputValue('m3_iniciativa');
     postulacionesActivas[uid].datos.negociador   = interaction.fields.getTextInputValue('m3_negociador');
-    guardarPostulacionesActivas().catch(e => console.error('Save error:', e.message));
+    guardarPostulacionesActivas().catch(e => console.error(e));
 
-    const restanteMs = postulacionesActivas[uid].expiraTs - Date.now();
-    const minutos = Math.max(0, Math.ceil(restanteMs / 60000));
+    const minutos = Math.max(0, Math.ceil((postulacionesActivas[uid].expiraTs - Date.now()) / 60000));
+    const embed = embedBase(COLOR.EXITO)
+      .setAuthor({ name: 'G.E.O.F • Sistema de Postulaciones' })
+      .setTitle('✅ Paso 3/4 completado')
+      .setDescription(`Táctica avanzada y motivación registradas.\n\n${DIV}\n\n**Último paso:** Escenario Táctico Final\n**Tiempo restante:** ⏳ **${minutos} minutos**`);
     const row = new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId('POSTULAR_SIG_4').setLabel('Continuar (4/4) — Situación').setStyle(ButtonStyle.Primary)
+      new ButtonBuilder().setCustomId('POSTULAR_SIG_4').setLabel('Continuar → Escenario Final').setStyle(ButtonStyle.Primary).setEmoji('🎯')
     );
-    await interaction.reply({ content: '✅ Táctica parte 2 guardada. Te quedan **' + minutos + ' minutos**.\n\nÚltimo paso: **situación táctica final**.', components: [row], ephemeral: true });
+    await interaction.reply({ embeds: [embed], components: [row], ephemeral: true });
     return;
   }
 
+  // ==================== MODAL 4 SUBMIT — SITUACIÓN + PUBLICAR EXPEDIENTE ====================
   if (interaction.isModalSubmit() && interaction.customId === 'POSTULAR_MODAL_4') {
     const uid = interaction.user.id;
     if (!postulacionesActivas[uid]) {
-      await interaction.reply({ content: '❌ Tu postulación se venció. Volvé a arrancar desde el panel.', ephemeral: true });
+      await interaction.reply({ embeds: [embedBase(COLOR.RECHAZADO).setTitle('❌ Expediente inválido').setDescription('Tu postulación ya no está activa.')], ephemeral: true });
       return;
     }
     postulacionesActivas[uid].datos.situacion = interaction.fields.getTextInputValue('m4_situacion');
-
     const d = postulacionesActivas[uid].datos;
+    const exp = postulacionesActivas[uid].expediente;
 
-    // Helper para valores con default
-    const sf = (v, max = 1024) => {
-      const s = (v || '_(vacío)_').toString();
-      return s.length > max ? s.slice(0, max - 3) + '...' : s;
-    };
-
-    // Truncar a 400 chars por campo largo para no pasar el límite de 6000 chars totales de Discord
-    const MAX_CAMPO = 400;
-
-    // Embed 1: Datos generales + Táctica parte 1
+    // Embed 1 — encabezado + datos personales + táctica I
     const embed1 = new EmbedBuilder()
-      .setTitle('🎯 NUEVO EXAMEN DE INGRESO — G.E.O.F (1/2) 🎯')
-      .setColor(COLOR_GEOF)
+      .setAuthor({ name: 'G.E.O.F • Nueva Postulación Recibida', iconURL: interaction.user.displayAvatarURL() })
+      .setTitle(`📋 EXPEDIENTE ${exp}`)
+      .setDescription(`**Estado:** \`PENDIENTE DE EVALUACIÓN\`\n${DIV}\n**◾ Postulante**`)
+      .setColor(COLOR.PENDIENTE)
       .setThumbnail(interaction.user.displayAvatarURL())
       .addFields(
-        { name: '👤 Nombre IC',       value: sf(d.nombre, 60),   inline: true },
-        { name: '🎖️ Rango PFA',       value: sf(d.rango, 60),    inline: true },
-        { name: '📅 Disponibilidad',  value: sf(d.disp, 60),     inline: true },
-        { name: '🔗 Discord',         value: '<@' + uid + '>',   inline: true },
-        { name: '🆔 Discord ID',      value: '`' + uid + '`',    inline: true },
+        { name: '👤 Nombre IC',      value: '```' + trunc(d.nombre, 60) + '```', inline: true },
+        { name: '🎖️ Rango PFA',     value: '```' + trunc(d.rango, 60) + '```',  inline: true },
+        { name: '📅 Disponibilidad', value: '```' + trunc(d.disp, 60) + '```',   inline: true },
+        { name: '🔗 Discord',        value: `<@${uid}>`, inline: true },
+        { name: '🆔 ID',             value: '`' + uid + '`', inline: true },
         { name: '\u200B', value: '\u200B', inline: true },
-        { name: '💬 Diferencia con otros', value: sf(d.diferencia, MAX_CAMPO), inline: false },
-        { name: '📖 NVL + ejemplo', value: sf(d.nvl, MAX_CAMPO), inline: false },
-        { name: '🚫 Por qué NO amenazar', value: sf(d.no_amenazar, MAX_CAMPO), inline: false },
-        { name: '🎭 Toma de rehenes', value: sf(d.rehenes, MAX_CAMPO), inline: false },
-        { name: '⚠️ Secuestro', value: sf(d.secuestro, MAX_CAMPO), inline: false },
-        { name: '🚪 Ingreso táctico', value: sf(d.ingreso, MAX_CAMPO), inline: false }
+        { name: `${DIV}\n💬 Diferenciación`, value: `> ${trunc(d.diferencia, 400)}`, inline: false },
+        { name: '📖 NVL + ejemplo', value: `> ${trunc(d.nvl, 400)}`, inline: false },
+        { name: '🚫 Por qué no amenazar', value: `> ${trunc(d.no_amenazar, 400)}`, inline: false },
+        { name: '🎭 Toma de rehenes', value: `> ${trunc(d.rehenes, 400)}`, inline: false }
       )
-      .setFooter({ text: 'G.E.O.F • Parte 1 de 2' });
+      .setFooter({ text: `Parte 1/2 • Expediente ${exp}` });
 
-    // Embed 2: Táctica parte 2 + Motivación + Situación
+    // Embed 2 — táctica II + motivación + situación
     const embed2 = new EmbedBuilder()
-      .setTitle('🎯 EXAMEN DE INGRESO — G.E.O.F (2/2) 🎯')
-      .setColor(COLOR_GEOF)
+      .setColor(COLOR.PENDIENTE)
+      .setDescription(`**◾ Continuación** — Expediente \`${exp}\``)
       .addFields(
-        { name: '📍 Perímetro (armado)', value: sf(d.perimetro, MAX_CAMPO), inline: false },
-        { name: '❓ ¿Por qué G.E.O.F?', value: sf(d.por_que, MAX_CAMPO), inline: false },
-        { name: '⚙️ Órdenes vs iniciativa', value: sf(d.iniciativa, MAX_CAMPO), inline: false },
-        { name: '🗣️ ¿Quién negocia?', value: sf(d.negociador, MAX_CAMPO), inline: false },
-        { name: '🎬 Situación táctica final', value: sf(d.situacion, MAX_CAMPO), inline: false }
+        { name: '⚠️ Secuestro', value: `> ${trunc(d.secuestro, 400)}`, inline: false },
+        { name: '🚪 Ingreso táctico', value: `> ${trunc(d.ingreso, 400)}`, inline: false },
+        { name: '📍 Perímetro', value: `> ${trunc(d.perimetro, 400)}`, inline: false },
+        { name: `${DIV}\n❓ ¿Por qué G.E.O.F?`, value: `> ${trunc(d.por_que, 400)}`, inline: false },
+        { name: '⚙️ Órdenes vs iniciativa', value: `> ${trunc(d.iniciativa, 400)}`, inline: false },
+        { name: '🗣️ ¿Quién negocia?', value: `> ${trunc(d.negociador, 400)}`, inline: false },
+        { name: `${DIV}\n🎬 Escenario táctico final`, value: `> ${trunc(d.situacion, 400)}`, inline: false }
       )
       .setTimestamp()
-      .setFooter({ text: 'G.E.O.F • Sistema de Postulaciones' });
+      .setFooter({ text: `Parte 2/2 • G.E.O.F • Recibido` });
 
     const mencionRoles = ROLES_AUTORIZADOS.map(r => '<@&' + r + '>').join(' ');
     const nombreLimpio = (d.nombre || 'postulante').replace(/[^a-zA-Z0-9]/g, '').slice(0, 30) || 'postulante';
     const row = new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId('ap_' + Date.now() + '_' + nombreLimpio + '_' + uid).setLabel('APROBAR').setStyle(ButtonStyle.Success),
-      new ButtonBuilder().setCustomId('re_' + Date.now() + '_' + nombreLimpio + '_' + uid).setLabel('RECHAZAR').setStyle(ButtonStyle.Danger)
+      new ButtonBuilder().setCustomId('ap_' + Date.now() + '_' + nombreLimpio + '_' + uid).setLabel('APROBAR').setStyle(ButtonStyle.Success).setEmoji('✅'),
+      new ButtonBuilder().setCustomId('re_' + Date.now() + '_' + nombreLimpio + '_' + uid).setLabel('RECHAZAR').setStyle(ButtonStyle.Danger).setEmoji('❌')
     );
 
-    // Intentar enviar los embeds — si falla, NO borrar el estado
     try {
       const canalAprob = await client.channels.fetch(CANAL_APROBACION);
-      await canalAprob.send({
-        content: mencionRoles,
-        embeds: [embed1, embed2],
-        components: [row],
-        allowedMentions: { roles: ROLES_AUTORIZADOS }
-      });
+      await canalAprob.send({ content: mencionRoles, embeds: [embed1, embed2], components: [row], allowedMentions: { roles: ROLES_AUTORIZADOS } });
     } catch (e) {
-      console.error('[POSTULAR MODAL 4] Error publicando postulación:', e);
-      // NO borramos el estado — el usuario puede reintentar
-      await interaction.reply({
-        content: '❌ **Hubo un error al enviar tu postulación.** Tus respuestas están guardadas. Volvé a intentar apretando el botón "🎯 POSTULARSE" del panel.\n\n_Error: ' + (e.message || 'desconocido') + '_',
-        ephemeral: true
-      });
+      console.error('[POSTULAR MODAL 4] Error publicando expediente:', e);
+      await interaction.reply({ embeds: [embedBase(COLOR.RECHAZADO).setTitle('❌ Error al enviar expediente').setDescription(`No se pudo publicar tu expediente. Tus respuestas siguen guardadas — presioná el botón del panel para reintentar.\n\n_Error: ${e.message || 'desconocido'}_`)], ephemeral: true });
       return;
     }
 
-    // Solo si el envío fue OK, borrar el estado
-    if (postulacionesActivas[uid] && postulacionesActivas[uid].timeoutId) clearTimeout(postulacionesActivas[uid].timeoutId);
+    if (postulacionesActivas[uid].timeoutId) clearTimeout(postulacionesActivas[uid].timeoutId);
     delete postulacionesActivas[uid];
-    guardarPostulacionesActivas().catch(e => console.error('Save error:', e.message));
+    guardarPostulacionesActivas().catch(e => console.error(e));
 
-    await interaction.reply({ content: '✅ **Tu postulación fue enviada correctamente.**\n\nLa oficialidad del G.E.O.F revisará tu examen y te avisará por mensaje privado si es aprobada o rechazada.\n\n_— G.E.O.F • Grupo Especial de Operaciones Federales_', ephemeral: true });
+    const embedOk = embedBase(COLOR.APROBADO)
+      .setAuthor({ name: 'G.E.O.F • Postulación Recibida' })
+      .setTitle('📨 Expediente enviado')
+      .setDescription(`Tu postulación fue registrada bajo el expediente **\`${exp}\`**.\n\n${DIV}\n\n**◾ Próximos pasos**\n${SEP} La oficialidad revisará tu examen\n${SEP} Se te notificará por **mensaje privado**\n${SEP} Aprobación o rechazo será comunicado en las próximas horas\n\n${DIV}\n\n> _Se agradece tu interés en formar parte del Grupo Especial de Operaciones Federales._`);
+    await interaction.reply({ embeds: [embedOk], ephemeral: true });
     return;
   }
 
-  // Modal operativo
+  // ==================== MODAL OPERATIVO SUBMIT ====================
   if (interaction.isModalSubmit() && interaction.customId === 'modal_operativo') {
     const tipo        = interaction.fields.getTextInputValue('op_tipo');
     const hora        = interaction.fields.getTextInputValue('op_hora');
@@ -438,32 +392,32 @@ client.on('interactionCreate', async (interaction) => {
     const requisitos  = interaction.fields.getTextInputValue('op_requisitos') || 'Toda la unidad';
 
     const embed = new EmbedBuilder()
-      .setTitle('🚨  OPERATIVO — G.E.O.F')
+      .setAuthor({ name: 'G.E.O.F • Operaciones Tácticas' })
+      .setTitle(`🚨 OPERATIVO — ${tipo.toUpperCase()}`)
+      .setDescription(`**${lugar}** • Convocado por <@${interaction.user.id}>\n${DIV}`)
+      .setColor(COLOR.OPERATIVO)
       .addFields(
-        { name: '📋 Tipo',           value: tipo,        inline: true },
-        { name: '🕐 Hora',           value: hora,        inline: true },
-        { name: '📍 Zona',           value: lugar,       inline: true },
-        { name: '👥 Participantes',  value: requisitos,  inline: true },
-        { name: '👮 Convocado por',  value: '<@' + interaction.user.id + '>', inline: true },
-        { name: '📝 Descripción',    value: descripcion, inline: false }
+        { name: '🕐 Hora',          value: '```' + hora + '```', inline: true },
+        { name: '📍 Zona',          value: '```' + lugar + '```', inline: true },
+        { name: '👥 Participantes', value: '```' + requisitos + '```', inline: true },
+        { name: '📝 Objetivo', value: `> ${trunc(descripcion, 800)}`, inline: false },
+        { name: `${DIV}\n👥 Asistentes confirmados (0)`, value: '_Presioná el botón para anotarte._', inline: false }
       )
-      .setColor(COLOR_GEOF_ALERTA).setTimestamp()
-      .setFooter({ text: 'G.E.O.F  •  Operaciones' });
-
-    const rowAnota = new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId('ANOTA_placeholder').setLabel('✅  Me anoto').setStyle(ButtonStyle.Success)
-    );
+      .setTimestamp()
+      .setFooter({ text: 'G.E.O.F • Sistema de Operaciones' });
 
     const canalOp = await client.channels.fetch(CANAL_OPERATIVOS);
+    const rowAnota = new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId('ANOTA_placeholder').setLabel('ME ANOTO').setStyle(ButtonStyle.Success).setEmoji('🎯')
+    );
     const msgEnviado = await canalOp.send({ content: '<@&' + ROL_GEOF + '>', embeds: [embed], components: [rowAnota] });
-
     const rowReal = new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId('ANOTA_' + msgEnviado.id).setLabel('✅  Me anoto').setStyle(ButtonStyle.Success)
+      new ButtonBuilder().setCustomId('ANOTA_' + msgEnviado.id).setLabel('ME ANOTO').setStyle(ButtonStyle.Success).setEmoji('🎯')
     );
     await msgEnviado.edit({ components: [rowReal] });
     asistentes[msgEnviado.id] = [];
 
-    await interaction.reply({ content: '✅ Operativo anunciado en <#' + CANAL_OPERATIVOS + '>.', ephemeral: true });
+    await interaction.reply({ embeds: [embedBase(COLOR.EXITO).setTitle('✅ Operativo publicado').setDescription(`El operativo fue publicado en <#${CANAL_OPERATIVOS}>.`)], ephemeral: true });
     return;
   }
 
@@ -471,152 +425,95 @@ client.on('interactionCreate', async (interaction) => {
   if (interaction.isButton()) {
     const id = interaction.customId;
 
-    // Botón POSTULAR_INICIAR: abre modal 1
+    // POSTULAR — inicia expediente
     if (id === 'POSTULAR_INICIAR') {
       const uid = interaction.user.id;
-
       const cooldownHasta = estaEnCooldown(uid);
       if (cooldownHasta) {
-        await interaction.reply({
-          content: '⏳ Ya te postulaste recientemente. Podés volver a intentar <t:' + Math.floor(cooldownHasta / 1000) + ':R>.',
-          ephemeral: true
-        });
+        const embed = embedBase(COLOR.ADVERTENCIA)
+          .setAuthor({ name: 'G.E.O.F • Postulación Bloqueada' })
+          .setTitle('⏳ Cooldown activo')
+          .setDescription(`Ya te postulaste recientemente.\nPodés volver a intentar <t:${Math.floor(cooldownHasta / 1000)}:R>.`);
+        await interaction.reply({ embeds: [embed], ephemeral: true });
         return;
       }
-
       if (postulacionesActivas[uid]) {
-        const restanteMs = postulacionesActivas[uid].expiraTs - Date.now();
-        const minutos = Math.max(0, Math.ceil(restanteMs / 60000));
-        await interaction.reply({
-          content: '❌ Ya tenés una postulación en curso. Te quedan **' + minutos + ' minutos** para terminarla.',
-          ephemeral: true
-        });
+        const minutos = Math.max(0, Math.ceil((postulacionesActivas[uid].expiraTs - Date.now()) / 60000));
+        const embed = embedBase(COLOR.ADVERTENCIA)
+          .setAuthor({ name: 'G.E.O.F • Expediente en Curso' })
+          .setTitle('📋 Ya tenés una postulación activa')
+          .setDescription(`Expediente **\`${postulacionesActivas[uid].expediente}\`**\nTiempo restante: **${minutos} minutos**\n\n${DIV}\n\nBuscá en tus mensajes el último formulario del bot y continuá desde ahí.`);
+        await interaction.reply({ embeds: [embed], ephemeral: true });
         return;
       }
-
-      // Chequear si ya es GEOF
       if (interaction.member.roles.cache.has(ROL_GEOF) || interaction.member.roles.cache.has(ROL_TACTICO) || interaction.member.roles.cache.has(ROL_MIEMBRO_GEOF)) {
-        await interaction.reply({ content: '❌ Ya sos parte del G.E.O.F. No podés volver a postularte.', ephemeral: true });
+        const embed = embedBase(COLOR.RECHAZADO)
+          .setAuthor({ name: 'G.E.O.F • Postulación Rechazada' })
+          .setTitle('❌ Ya sos parte del G.E.O.F')
+          .setDescription('Los oficiales activos del G.E.O.F no pueden volver a postularse.');
+        await interaction.reply({ embeds: [embed], ephemeral: true });
         return;
       }
-
+      const expediente = generarExpediente();
       postulacionesActivas[uid] = {
         inicio: Date.now(),
         expiraTs: Date.now() + TIEMPO_MAX_POSTULACION_MS,
+        expediente,
         timeoutId: null,
         datos: {}
       };
       iniciarTimeoutPostulacion(uid);
-      guardarPostulacionesActivas().catch(e => console.error('Save error:', e.message));
+      guardarPostulacionesActivas().catch(e => console.error(e));
 
-      // Modal 1: datos personales
-      const modal = new ModalBuilder()
-        .setCustomId('POSTULAR_MODAL_1')
-        .setTitle('Postulación G.E.O.F (1/4) — Datos');
-
+      const modal = new ModalBuilder().setCustomId('POSTULAR_MODAL_1').setTitle(`Expediente ${expediente} • Datos (1/4)`);
       modal.addComponents(
-        new ActionRowBuilder().addComponents(
-          new TextInputBuilder().setCustomId('m1_nombre').setLabel('Nombre IC en el server')
-            .setStyle(TextInputStyle.Short).setRequired(true).setMinLength(2).setMaxLength(60)
-        ),
-        new ActionRowBuilder().addComponents(
-          new TextInputBuilder().setCustomId('m1_rango').setLabel('Rango actual en la PFA')
-            .setStyle(TextInputStyle.Short).setRequired(true).setMinLength(2).setMaxLength(60)
-        ),
-        new ActionRowBuilder().addComponents(
-          new TextInputBuilder().setCustomId('m1_disp').setLabel('Días disponibles por semana')
-            .setStyle(TextInputStyle.Short).setRequired(true).setMinLength(1).setMaxLength(30)
-        ),
-        new ActionRowBuilder().addComponents(
-          new TextInputBuilder().setCustomId('m1_diferencia').setLabel('¿Qué te diferencia de otros postulantes?')
-            .setStyle(TextInputStyle.Paragraph).setRequired(true).setMinLength(20).setMaxLength(800)
-        ),
-        new ActionRowBuilder().addComponents(
-          new TextInputBuilder().setCustomId('m1_confirm').setLabel('Escribí "ACEPTO" para confirmar')
-            .setStyle(TextInputStyle.Short).setRequired(true).setMinLength(6).setMaxLength(10)
-            .setPlaceholder('ACEPTO')
-        )
+        new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('m1_nombre').setLabel('Nombre IC en el server').setStyle(TextInputStyle.Short).setRequired(true).setMinLength(2).setMaxLength(60)),
+        new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('m1_rango').setLabel('Rango actual en la PFA').setStyle(TextInputStyle.Short).setRequired(true).setMinLength(2).setMaxLength(60)),
+        new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('m1_disp').setLabel('Días disponibles por semana').setStyle(TextInputStyle.Short).setRequired(true).setMinLength(1).setMaxLength(30)),
+        new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('m1_diferencia').setLabel('¿Qué te diferencia de otros postulantes?').setStyle(TextInputStyle.Paragraph).setRequired(true).setMinLength(20).setMaxLength(800)),
+        new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('m1_confirm').setLabel('Escribí "ACEPTO" para confirmar').setStyle(TextInputStyle.Short).setRequired(true).setMinLength(6).setMaxLength(10).setPlaceholder('ACEPTO'))
       );
       await interaction.showModal(modal);
       return;
     }
 
-    // Botones para continuar al siguiente modal
+    // POSTULAR_SIG — botones de continuar entre pasos
     if (id.startsWith('POSTULAR_SIG_')) {
       const paso = id.replace('POSTULAR_SIG_', '');
       const uid = interaction.user.id;
-
       if (!postulacionesActivas[uid]) {
-        await interaction.reply({ content: '❌ Tu postulación se venció o no existe. Volvé a arrancar desde el panel.', ephemeral: true });
+        await interaction.reply({ embeds: [embedBase(COLOR.RECHAZADO).setTitle('❌ Expediente inválido').setDescription('Tu postulación ya no está activa.')], ephemeral: true });
         return;
       }
+      const exp = postulacionesActivas[uid].expediente;
 
       if (paso === '2') {
-        const modal = new ModalBuilder()
-          .setCustomId('POSTULAR_MODAL_2')
-          .setTitle('Postulación G.E.O.F (2/4) — Táctica');
+        const modal = new ModalBuilder().setCustomId('POSTULAR_MODAL_2').setTitle(`Expediente ${exp} • Táctica I (2/4)`);
         modal.addComponents(
-          new ActionRowBuilder().addComponents(
-            new TextInputBuilder().setCustomId('m2_nvl').setLabel('¿Qué es el NVL? Poné un ejemplo')
-              .setStyle(TextInputStyle.Paragraph).setRequired(true).setMinLength(20).setMaxLength(600)
-          ),
-          new ActionRowBuilder().addComponents(
-            new TextInputBuilder().setCustomId('m2_no_amenazar').setLabel('¿Por qué NO se debe amenazar al sospechoso?')
-              .setStyle(TextInputStyle.Paragraph).setRequired(true).setMinLength(20).setMaxLength(600)
-          ),
-          new ActionRowBuilder().addComponents(
-            new TextInputBuilder().setCustomId('m2_rehenes').setLabel('¿Cómo actuarías en una toma de rehenes?')
-              .setStyle(TextInputStyle.Paragraph).setRequired(true).setMinLength(20).setMaxLength(600)
-          ),
-          new ActionRowBuilder().addComponents(
-            new TextInputBuilder().setCustomId('m2_secuestro').setLabel('¿Cómo actuarías en un secuestro?')
-              .setStyle(TextInputStyle.Paragraph).setRequired(true).setMinLength(20).setMaxLength(600)
-          ),
-          new ActionRowBuilder().addComponents(
-            new TextInputBuilder().setCustomId('m2_ingreso').setLabel('¿Cómo se hace un ingreso táctico?')
-              .setStyle(TextInputStyle.Paragraph).setRequired(true).setMinLength(20).setMaxLength(600)
-          )
+          new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('m2_nvl').setLabel('¿Qué es el NVL? Poné un ejemplo').setStyle(TextInputStyle.Paragraph).setRequired(true).setMinLength(20).setMaxLength(600)),
+          new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('m2_no_amenazar').setLabel('¿Por qué NO se debe amenazar al sospechoso?').setStyle(TextInputStyle.Paragraph).setRequired(true).setMinLength(20).setMaxLength(600)),
+          new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('m2_rehenes').setLabel('¿Cómo actuarías en una toma de rehenes?').setStyle(TextInputStyle.Paragraph).setRequired(true).setMinLength(20).setMaxLength(600)),
+          new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('m2_secuestro').setLabel('¿Cómo actuarías en un secuestro?').setStyle(TextInputStyle.Paragraph).setRequired(true).setMinLength(20).setMaxLength(600)),
+          new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('m2_ingreso').setLabel('¿Cómo se hace un ingreso táctico?').setStyle(TextInputStyle.Paragraph).setRequired(true).setMinLength(20).setMaxLength(600))
         );
         await interaction.showModal(modal);
         return;
       }
-
       if (paso === '3') {
-        const modal = new ModalBuilder()
-          .setCustomId('POSTULAR_MODAL_3')
-          .setTitle('Postulación G.E.O.F (3/4) — Táctica II');
+        const modal = new ModalBuilder().setCustomId('POSTULAR_MODAL_3').setTitle(`Expediente ${exp} • Táctica II (3/4)`);
         modal.addComponents(
-          new ActionRowBuilder().addComponents(
-            new TextInputBuilder().setCustomId('m3_perimetro').setLabel('¿Qué es un perímetro y cómo se arma?')
-              .setStyle(TextInputStyle.Paragraph).setRequired(true).setMinLength(20).setMaxLength(700)
-          ),
-          new ActionRowBuilder().addComponents(
-            new TextInputBuilder().setCustomId('m3_por_que').setLabel('¿Por qué querés ser parte del G.E.O.F?')
-              .setStyle(TextInputStyle.Paragraph).setRequired(true).setMinLength(30).setMaxLength(1000)
-          ),
-          new ActionRowBuilder().addComponents(
-            new TextInputBuilder().setCustomId('m3_iniciativa').setLabel('¿Seguir órdenes o tomar iniciativa?')
-              .setStyle(TextInputStyle.Paragraph).setRequired(true).setMinLength(20).setMaxLength(700)
-          ),
-          new ActionRowBuilder().addComponents(
-            new TextInputBuilder().setCustomId('m3_negociador').setLabel('¿Quién negocia en una toma de rehenes?')
-              .setStyle(TextInputStyle.Paragraph).setRequired(true).setMinLength(20).setMaxLength(600)
-          )
+          new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('m3_perimetro').setLabel('¿Qué es un perímetro y cómo se arma?').setStyle(TextInputStyle.Paragraph).setRequired(true).setMinLength(20).setMaxLength(700)),
+          new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('m3_por_que').setLabel('¿Por qué querés ser parte del G.E.O.F?').setStyle(TextInputStyle.Paragraph).setRequired(true).setMinLength(30).setMaxLength(1000)),
+          new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('m3_iniciativa').setLabel('¿Seguir órdenes o tomar iniciativa?').setStyle(TextInputStyle.Paragraph).setRequired(true).setMinLength(20).setMaxLength(700)),
+          new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('m3_negociador').setLabel('¿Quién negocia en una toma de rehenes?').setStyle(TextInputStyle.Paragraph).setRequired(true).setMinLength(20).setMaxLength(600))
         );
         await interaction.showModal(modal);
         return;
       }
-
       if (paso === '4') {
-        const modal = new ModalBuilder()
-          .setCustomId('POSTULAR_MODAL_4')
-          .setTitle('Postulación G.E.O.F (4/4) — Situación');
+        const modal = new ModalBuilder().setCustomId('POSTULAR_MODAL_4').setTitle(`Expediente ${exp} • Escenario (4/4)`);
         modal.addComponents(
-          new ActionRowBuilder().addComponents(
-            new TextInputBuilder().setCustomId('m4_situacion').setLabel('Situación táctica')
-              .setStyle(TextInputStyle.Paragraph).setRequired(true).setMinLength(50).setMaxLength(1500)
-              .setPlaceholder('2 rehenes en tienda. Exigen vehículo + negociador. Sos el primer GEOF en llegar. ¿Cómo negociás?')
-          )
+          new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('m4_situacion').setLabel('Escenario táctico final').setStyle(TextInputStyle.Paragraph).setRequired(true).setMinLength(50).setMaxLength(1500).setPlaceholder('2 rehenes en tienda. Exigen vehículo + negociador. Sos el primer GEOF. ¿Cómo negociás?'))
         );
         await interaction.showModal(modal);
         return;
@@ -624,36 +521,33 @@ client.on('interactionCreate', async (interaction) => {
       return;
     }
 
-    // Botón "Me anoto" a un operativo
+    // ANOTA_ — anotarse a operativo
     if (id.startsWith('ANOTA_')) {
       const msgId = id.replace('ANOTA_', '');
       if (!asistentes[msgId]) asistentes[msgId] = [];
-
       if (asistentes[msgId].includes(interaction.user.id)) {
-        await interaction.reply({ content: '❌ Ya te anotaste en este operativo.', ephemeral: true });
+        await interaction.reply({ embeds: [embedBase(COLOR.ADVERTENCIA).setTitle('⚠️ Ya estás anotado').setDescription('Ya confirmaste asistencia a este operativo.')], ephemeral: true });
         return;
       }
-
       asistentes[msgId].push(interaction.user.id);
-      await guardarAsistentes();
-      const lista = asistentes[msgId].map(uid => '<@' + uid + '>').join('\n');
-
+      guardarAsistentes().catch(e => console.error(e));
+      const lista = asistentes[msgId].map(u => `${SEP} <@${u}>`).join('\n');
       const msgOriginal = interaction.message;
-      const embedActualizado = EmbedBuilder.from(msgOriginal.embeds[0])
-        .setFields(
-          ...msgOriginal.embeds[0].fields.filter(f => f.name !== '👥 Asistentes confirmados'),
-          { name: '👥 Asistentes confirmados (' + asistentes[msgId].length + ')', value: lista, inline: false }
-        );
-
+      const embedActualizado = EmbedBuilder.from(msgOriginal.embeds[0]).setFields(
+        ...msgOriginal.embeds[0].fields.filter(f => !f.name.includes('Asistentes confirmados')),
+        { name: `${DIV}\n👥 Asistentes confirmados (${asistentes[msgId].length})`, value: lista, inline: false }
+      );
       await interaction.update({ embeds: [embedActualizado] });
       return;
     }
 
-    // Botones de postulaciones (APROBAR / RECHAZAR)
+    // APROBAR / RECHAZAR
     if (id.startsWith('ap_') || id.startsWith('re_')) {
       const tieneRol = ROLES_AUTORIZADOS.some(r => interaction.member.roles.cache.has(r));
-      if (!tieneRol) { await interaction.reply({ content: '❌ No tenés permisos.', ephemeral: true }); return; }
-
+      if (!tieneRol) {
+        await interaction.reply({ embeds: [embedBase(COLOR.RECHAZADO).setTitle('❌ Sin permisos').setDescription('No estás autorizado para evaluar postulaciones.')], ephemeral: true });
+        return;
+      }
       await interaction.deferUpdate();
       const parts = id.split('_');
       const accion = parts[0], discordId = parts[3];
@@ -661,98 +555,127 @@ client.on('interactionCreate', async (interaction) => {
 
       try {
         if (accion === 'ap') {
-          // APROBAR
           if (!discordId) {
             const rowDone = new ActionRowBuilder().addComponents(
-              new ButtonBuilder().setCustomId('done1').setLabel('APROBADO por ' + revisor + ' (sin ID)').setStyle(ButtonStyle.Success).setDisabled(true),
-              new ButtonBuilder().setCustomId('done2').setLabel('RECHAZAR').setStyle(ButtonStyle.Danger).setDisabled(true)
+              new ButtonBuilder().setCustomId('done_ap').setLabel(`APROBADO por ${revisor} (sin ID)`).setStyle(ButtonStyle.Success).setDisabled(true).setEmoji('✅'),
+              new ButtonBuilder().setCustomId('done_re').setLabel('RECHAZAR').setStyle(ButtonStyle.Danger).setDisabled(true).setEmoji('❌')
             );
             await interaction.editReply({ components: [rowDone] });
             return;
           }
-
           let miembro;
           try { miembro = await interaction.guild.members.fetch(discordId); }
           catch (e) {
-            await interaction.followUp({ content: '⚠️ No pude encontrar al usuario en el server.', ephemeral: true });
+            await interaction.followUp({ embeds: [embedBase(COLOR.ADVERTENCIA).setTitle('⚠️ Postulante no encontrado').setDescription('No se pudo localizar al usuario en el servidor.')], ephemeral: true });
             return;
           }
-
-          // Agregar los 2 roles GEOF SIN sacar ninguno de los que ya tiene
           try {
-            const rolesAAgregar = [ROL_GEOF, ROL_TACTICO];
-            for (const r of rolesAAgregar) {
-              if (!miembro.roles.cache.has(r)) {
-                await miembro.roles.add(r, 'Ingreso al G.E.O.F por aprobación');
-              }
+            for (const r of [ROL_GEOF, ROL_TACTICO]) {
+              if (!miembro.roles.cache.has(r)) await miembro.roles.add(r, 'Ingreso G.E.O.F por aprobación');
             }
           } catch (e) {
             console.error('Error asignando roles:', e.message);
-            await interaction.followUp({ content: '⚠️ Aprobado pero no pude asignar los roles. Verificá jerarquía del bot.', ephemeral: true });
+            await interaction.followUp({ embeds: [embedBase(COLOR.ADVERTENCIA).setTitle('⚠️ Aprobado con advertencia').setDescription('El postulante fue aprobado pero no se pudo asignar los roles. Verificá la jerarquía del bot.')], ephemeral: true });
             return;
           }
 
-          // Publicar embed de ingreso en CANAL_UPDATES
+          // Embed de ingreso en updates
           const embedIngreso = new EmbedBuilder()
-            .setTitle('🎯 NUEVO INGRESO — G.E.O.F')
-            .setDescription('<@' + discordId + '> ha sido ingresado oficialmente al **G.E.O.F**.\n¡Bienvenido, Agente!')
-            .addFields(
-              { name: '👮 Ingresado por', value: revisor, inline: true },
-              { name: '🔸 Roles asignados', value: 'GEOF + Táctico', inline: true }
-            )
-            .setColor(COLOR_GEOF_APROBAR)
+            .setAuthor({ name: 'G.E.O.F • Registro de Ingresos' })
+            .setTitle('🎯 NUEVO INGRESO CONFIRMADO')
+            .setDescription(`<@${discordId}> ha sido incorporado oficialmente al **G.E.O.F**.\n${DIV}`)
+            .setColor(COLOR.APROBADO)
             .setThumbnail(miembro.displayAvatarURL())
+            .addFields(
+              { name: '👮 Evaluado por', value: `<@${interaction.user.id}>`, inline: true },
+              { name: '📅 Fecha',        value: `<t:${Math.floor(Date.now() / 1000)}:F>`, inline: true },
+              { name: '🔸 Roles otorgados', value: '`GEOF` · `Táctico`', inline: true },
+              { name: '\u200B', value: `${DIV}\n> _Bienvenido al Grupo Especial de Operaciones Federales._\n> _Se espera profesionalismo y criterio táctico en cada operativo._`, inline: false }
+            )
             .setTimestamp()
-            .setFooter({ text: 'G.E.O.F  •  Sistema de Ingresos' });
+            .setFooter({ text: 'G.E.O.F • Sistema de Ingresos' });
           try {
             const canalUp = await client.channels.fetch(CANAL_UPDATES);
-            await canalUp.send({ content: '<@' + discordId + '>', embeds: [embedIngreso] });
-          } catch (e) { console.error('Publicar ingreso en updates:', e.message); }
+            await canalUp.send({ content: `<@${discordId}>`, embeds: [embedIngreso] });
+          } catch (e) { console.error('Publicar ingreso:', e.message); }
 
           // DM al aprobado
           try {
-            await miembro.send({ content: '✅ **¡Fuiste APROBADO en el G.E.O.F!**\n\nBienvenido al Grupo Especial de Operaciones Federales. Ya se te asignaron los roles y podés participar en los operativos.\n\n**Revisado por:** ' + revisor + '\n\n_— G.E.O.F · Kilombo RP_' });
+            const embedDM = new EmbedBuilder()
+              .setAuthor({ name: 'G.E.O.F • Postulación Aprobada' })
+              .setTitle('✅ ¡Fuiste APROBADO en el G.E.O.F!')
+              .setDescription(`Felicitaciones. Fuiste incorporado al **Grupo Especial de Operaciones Federales**.\n${DIV}`)
+              .setColor(COLOR.APROBADO)
+              .addFields(
+                { name: '👮 Evaluado por', value: revisor, inline: true },
+                { name: '📅 Fecha',        value: `<t:${Math.floor(Date.now() / 1000)}:F>`, inline: true },
+                { name: '\u200B', value: `${DIV}\n**Próximos pasos**\n${SEP} Los roles ya fueron asignados a tu cuenta\n${SEP} Presentate en los próximos operativos\n${SEP} Consultá los protocolos con la oficialidad\n${SEP} Se espera profesionalismo en cada operativo`, inline: false }
+              )
+              .setTimestamp()
+              .setFooter({ text: 'G.E.O.F • Kilombo RP' });
+            await miembro.send({ embeds: [embedDM] });
           } catch (e) { /* DM cerrado */ }
 
           const rowDone = new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId('done1').setLabel('APROBADO por ' + revisor).setStyle(ButtonStyle.Success).setDisabled(true),
-            new ButtonBuilder().setCustomId('done2').setLabel('RECHAZAR').setStyle(ButtonStyle.Danger).setDisabled(true)
+            new ButtonBuilder().setCustomId('done_ap').setLabel(`APROBADO por ${revisor}`).setStyle(ButtonStyle.Success).setDisabled(true).setEmoji('✅'),
+            new ButtonBuilder().setCustomId('done_re').setLabel('RECHAZAR').setStyle(ButtonStyle.Danger).setDisabled(true).setEmoji('❌')
           );
-          await interaction.editReply({ components: [rowDone] });
+
+          // Marcar embed original como aprobado (cambiar color + estado)
+          const embedsOriginales = interaction.message.embeds.map(e => EmbedBuilder.from(e).setColor(COLOR.APROBADO));
+          if (embedsOriginales[0]) {
+            const desc = embedsOriginales[0].data.description || '';
+            embedsOriginales[0].setDescription(desc.replace('`PENDIENTE DE EVALUACIÓN`', '`✅ APROBADO`'));
+          }
+          await interaction.editReply({ embeds: embedsOriginales, components: [rowDone] });
 
         } else {
           // RECHAZAR
-          const rowDone = new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId('done1').setLabel('APROBAR').setStyle(ButtonStyle.Success).setDisabled(true),
-            new ButtonBuilder().setCustomId('done2').setLabel('RECHAZADO por ' + revisor).setStyle(ButtonStyle.Danger).setDisabled(true)
-          );
-          await interaction.editReply({ components: [rowDone] });
-
           if (!discordId) {
-            await interaction.followUp({ content: '⚠️ Rechazado pero no hay Discord ID.', ephemeral: true });
+            const rowDone = new ActionRowBuilder().addComponents(
+              new ButtonBuilder().setCustomId('done_ap').setLabel('APROBAR').setStyle(ButtonStyle.Success).setDisabled(true).setEmoji('✅'),
+              new ButtonBuilder().setCustomId('done_re').setLabel(`RECHAZADO por ${revisor}`).setStyle(ButtonStyle.Danger).setDisabled(true).setEmoji('❌')
+            );
+            await interaction.editReply({ components: [rowDone] });
             return;
           }
-
-          // Aplicar cooldown de 24hs
           postulacionesCooldown[discordId] = Date.now() + COOLDOWN_POSTULACION_MS;
-          guardarCooldowns().catch(e => console.error('Save cooldowns error:', e.message));
-
-          // Enviar DM al postulante rechazado
+          guardarCooldowns().catch(e => console.error(e));
           try {
             const miembro = await interaction.guild.members.fetch(discordId);
-            await miembro.send({
-              content: '❌ **Postulación rechazada — G.E.O.F**\n\nLamentamos informarte que tu postulación al **G.E.O.F** fue **RECHAZADA**.\n\n**Revisado por:** ' + revisor + '\n**Fecha:** ' + fecha() + '\n\nPodés volver a postularte en **24 horas**.\n\n_— G.E.O.F · Kilombo RP_'
-            });
+            const embedDM = new EmbedBuilder()
+              .setAuthor({ name: 'G.E.O.F • Postulación Rechazada' })
+              .setTitle('❌ Postulación no aprobada')
+              .setDescription(`Tu postulación al **G.E.O.F** no fue aprobada.\n${DIV}`)
+              .setColor(COLOR.RECHAZADO)
+              .addFields(
+                { name: '👮 Evaluado por', value: revisor, inline: true },
+                { name: '📅 Fecha',        value: `<t:${Math.floor(Date.now() / 1000)}:F>`, inline: true },
+                { name: '⏳ Cooldown',     value: '**24 horas**', inline: true },
+                { name: '\u200B', value: `${DIV}\n> Podés volver a postularte una vez transcurrido el período de espera.\n> Te sugerimos revisar los protocolos tácticos y afinar tu criterio antes del próximo intento.`, inline: false }
+              )
+              .setTimestamp()
+              .setFooter({ text: 'G.E.O.F • Kilombo RP' });
+            await miembro.send({ embeds: [embedDM] });
           } catch (e) {
             console.error('Error DM rechazo:', e.message);
-            await interaction.followUp({ content: '⚠️ Rechazado, cooldown aplicado, pero no pude enviarle DM (DMs cerrados).', ephemeral: true });
-            return;
+            await interaction.followUp({ embeds: [embedBase(COLOR.ADVERTENCIA).setTitle('⚠️ Rechazado, sin notificación').setDescription('Se aplicó el cooldown pero no se pudo enviar DM (el postulante tiene DMs cerrados).')], ephemeral: true });
           }
+
+          const rowDone = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId('done_ap').setLabel('APROBAR').setStyle(ButtonStyle.Success).setDisabled(true).setEmoji('✅'),
+            new ButtonBuilder().setCustomId('done_re').setLabel(`RECHAZADO por ${revisor}`).setStyle(ButtonStyle.Danger).setDisabled(true).setEmoji('❌')
+          );
+          const embedsOriginales = interaction.message.embeds.map(e => EmbedBuilder.from(e).setColor(COLOR.RECHAZADO));
+          if (embedsOriginales[0]) {
+            const desc = embedsOriginales[0].data.description || '';
+            embedsOriginales[0].setDescription(desc.replace('`PENDIENTE DE EVALUACIÓN`', '`❌ RECHAZADO`'));
+          }
+          await interaction.editReply({ embeds: embedsOriginales, components: [rowDone] });
         }
       } catch (err) { console.error('Error postulacion:', err); }
       return;
     }
-
     return;
   }
 
@@ -764,53 +687,39 @@ client.on('interactionCreate', async (interaction) => {
   const tieneRol = ROLES_AUTORIZADOS.some(r => interaction.member.roles.cache.has(r));
   const revisor = interaction.member?.displayName || interaction.user.username;
 
-  // Todos los subcomandos requieren rol autorizado
   if (!tieneRol) {
-    await interaction.reply({ content: '❌ No tenés permisos para usar este comando.', ephemeral: true });
+    await interaction.reply({ embeds: [embedBase(COLOR.RECHAZADO).setTitle('❌ Sin permisos').setDescription('Este comando está reservado a la oficialidad del G.E.O.F.')], ephemeral: true });
     return;
   }
 
   // /geof panel-postulaciones
   if (sub === 'panel-postulaciones') {
     if (interaction.channelId !== CANAL_PANEL) {
-      await interaction.reply({ content: '❌ Este comando solo puede usarse en <#' + CANAL_PANEL + '>.', ephemeral: true });
+      await interaction.reply({ embeds: [embedBase(COLOR.ADVERTENCIA).setTitle('⚠️ Canal incorrecto').setDescription(`Este comando solo puede usarse en <#${CANAL_PANEL}>.`)], ephemeral: true });
       return;
     }
     await interaction.deferReply({ ephemeral: true });
-
     const embedPanel = new EmbedBuilder()
-      .setTitle('🎯 G.E.O.F — POSTULACIONES ABIERTAS')
-      .setDescription('Si querés formar parte del **Grupo Especial de Operaciones Federales**, la unidad táctica de élite de la PFA, este es tu lugar.\n\n' +
-        '**Requisitos generales:**\n' +
-        '• Ser oficial activo de la PFA (rango Sargento en adelante).\n' +
-        '• Contar con micrófono funcional.\n' +
-        '• Disponibilidad horaria para participar en operativos.\n' +
-        '• Conocimiento sólido de protocolos tácticos, tomas de rehenes, secuestros e ingresos.\n' +
-        '• Criterio en situaciones de alta presión.\n\n' +
-        '**Cómo postularse:**\n' +
-        '1. Hacé click en el botón **"🎯 POSTULARSE"** abajo.\n' +
-        '2. Vas a completar **4 formularios** con datos, conocimiento táctico, motivación y una situación.\n' +
-        '3. **Tenés 15 minutos** para completar todo. Si se te pasa el tiempo, deberás esperar 24 horas para reintentar.\n' +
-        '4. Si te rechazan, también deberás esperar 24 horas antes de volver a postularte.\n\n' +
-        '**Importante:** Contestá con criterio y honestidad. No sirve copiar respuestas — evaluamos tu forma de pensar y actuar.\n\n' +
-        '_— G.E.O.F · Kilombo RP_')
-      .setColor(COLOR_GEOF)
-      .setFooter({ text: 'G.E.O.F  •  Sistema de Postulaciones' });
-
+      .setAuthor({ name: 'G.E.O.F • Grupo Especial de Operaciones Federales' })
+      .setTitle('🎯 CONVOCATORIA ABIERTA')
+      .setDescription(
+        `Buscamos oficiales de la PFA con **criterio**, **mentalidad táctica** y disposición para operativos de alta complejidad.\n\n${DIV}\n\n` +
+        `**◾ Requisitos**\n${SEP} Rango PFA activo (Sargento o superior)\n${SEP} Micrófono funcional\n${SEP} Disponibilidad para operativos\n${SEP} Conocimiento de protocolos tácticos\n${SEP} Criterio bajo presión\n\n` +
+        `**◾ Proceso de admisión**\n${SEP} **4 formularios** secuenciales\n${SEP} Datos personales · Táctica I · Táctica II · Escenario final\n${SEP} Tiempo límite: **15 minutos**\n${SEP} Cooldown post-rechazo: **24 horas**\n\n${DIV}\n\n` +
+        `**⚠️ Advertencia**\n> Las respuestas se evalúan por **calidad**, no cantidad.\n> Copiar respuestas resulta en **rechazo automático**.`
+      )
+      .setColor(COLOR.BASE)
+      .setFooter({ text: 'G.E.O.F • Postulaciones vía Sistema Interno' });
     const row = new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId('POSTULAR_INICIAR')
-        .setLabel('🎯 POSTULARSE')
-        .setStyle(ButtonStyle.Primary)
+      new ButtonBuilder().setCustomId('POSTULAR_INICIAR').setLabel('POSTULARSE').setStyle(ButtonStyle.Primary).setEmoji('🎯')
     );
-
     try {
       const canalPanel = await client.channels.fetch(CANAL_PANEL);
       await canalPanel.send({ embeds: [embedPanel], components: [row] });
-      await interaction.editReply({ content: '✅ Panel publicado en <#' + CANAL_PANEL + '>.' });
+      await interaction.editReply({ embeds: [embedBase(COLOR.EXITO).setTitle('✅ Panel publicado').setDescription(`El panel de convocatoria fue publicado en <#${CANAL_PANEL}>.`)] });
     } catch (e) {
       console.error('Panel:', e);
-      try { await interaction.editReply({ content: '❌ Error al publicar el panel: ' + (e.message || 'desconocido') }); } catch (e2) {}
+      try { await interaction.editReply({ embeds: [embedBase(COLOR.RECHAZADO).setTitle('❌ Error al publicar').setDescription(`No se pudo publicar el panel.\n\`Error: ${e.message || 'desconocido'}\``)] }); } catch (e2) {}
     }
     return;
   }
@@ -818,32 +727,36 @@ client.on('interactionCreate', async (interaction) => {
   // /geof nuevo
   if (sub === 'nuevo') {
     if (interaction.channelId !== CANAL_UPDATES) {
-      await interaction.reply({ content: '❌ Este comando solo puede usarse en <#' + CANAL_UPDATES + '>.', ephemeral: true });
+      await interaction.reply({ embeds: [embedBase(COLOR.ADVERTENCIA).setTitle('⚠️ Canal incorrecto').setDescription(`Este comando solo puede usarse en <#${CANAL_UPDATES}>.`)], ephemeral: true });
       return;
     }
     await interaction.deferReply({ ephemeral: true });
-
     const usuario = interaction.options.getUser('usuario');
     try {
       const miembro = await interaction.guild.members.fetch(usuario.id);
-      const rolesAAgregar = [ROL_GEOF, ROL_TACTICO];
-      for (const r of rolesAAgregar) {
-        if (!miembro.roles.cache.has(r)) await miembro.roles.add(r, 'Ingreso manual al G.E.O.F');
+      for (const r of [ROL_GEOF, ROL_TACTICO]) {
+        if (!miembro.roles.cache.has(r)) await miembro.roles.add(r, 'Ingreso manual G.E.O.F');
       }
       const canalUp = await client.channels.fetch(CANAL_UPDATES);
-      const embed = new EmbedBuilder().setTitle('🎯 NUEVO INGRESO — G.E.O.F')
-        .setDescription('<@' + usuario.id + '> ha sido ingresado oficialmente al **G.E.O.F**.\n¡Bienvenido, Agente!')
+      const embed = new EmbedBuilder()
+        .setAuthor({ name: 'G.E.O.F • Registro de Ingresos' })
+        .setTitle('🎯 NUEVO INGRESO CONFIRMADO')
+        .setDescription(`<@${usuario.id}> ha sido incorporado oficialmente al **G.E.O.F**.\n${DIV}`)
+        .setColor(COLOR.APROBADO)
+        .setThumbnail(usuario.displayAvatarURL())
         .addFields(
           { name: '👮 Ingresado por', value: revisor, inline: true },
-          { name: '🔸 Roles asignados', value: 'GEOF + Táctico', inline: true }
+          { name: '📅 Fecha',         value: `<t:${Math.floor(Date.now() / 1000)}:F>`, inline: true },
+          { name: '🔸 Roles otorgados', value: '`GEOF` · `Táctico`', inline: true },
+          { name: '\u200B', value: `${DIV}\n> _Bienvenido al Grupo Especial de Operaciones Federales._\n> _Ingreso manual autorizado por la oficialidad._`, inline: false }
         )
-        .setColor(COLOR_GEOF_APROBAR).setThumbnail(usuario.displayAvatarURL()).setTimestamp()
-        .setFooter({ text: 'G.E.O.F  •  Sistema de Ingresos' });
-      await canalUp.send({ content: '<@' + usuario.id + '>', embeds: [embed] });
-      await interaction.editReply({ content: '✅ **' + miembro.displayName + '** ingresado al G.E.O.F.' });
+        .setTimestamp()
+        .setFooter({ text: 'G.E.O.F • Sistema de Ingresos' });
+      await canalUp.send({ content: `<@${usuario.id}>`, embeds: [embed] });
+      await interaction.editReply({ embeds: [embedBase(COLOR.EXITO).setTitle('✅ Ingreso registrado').setDescription(`**${miembro.displayName}** fue incorporado al G.E.O.F.`)] });
     } catch (err) {
       console.error('/geof nuevo:', err);
-      try { await interaction.editReply({ content: '❌ Error al ingresar al miembro: ' + (err.message || 'desconocido') }); } catch (e2) {}
+      try { await interaction.editReply({ embeds: [embedBase(COLOR.RECHAZADO).setTitle('❌ Error al ingresar').setDescription(`No se pudo ingresar al miembro.\n\`${err.message || 'error desconocido'}\``)] }); } catch (e2) {}
     }
     return;
   }
@@ -852,29 +765,11 @@ client.on('interactionCreate', async (interaction) => {
   if (sub === 'operativo') {
     const modal = new ModalBuilder().setCustomId('modal_operativo').setTitle('Nuevo Operativo — G.E.O.F');
     modal.addComponents(
-      new ActionRowBuilder().addComponents(
-        new TextInputBuilder().setCustomId('op_tipo').setLabel('Tipo de operativo')
-          .setStyle(TextInputStyle.Short).setPlaceholder('Ej: Toma de rehenes, Ingreso táctico, Perímetro')
-          .setRequired(true).setMaxLength(60)
-      ),
-      new ActionRowBuilder().addComponents(
-        new TextInputBuilder().setCustomId('op_hora').setLabel('Hora del operativo')
-          .setStyle(TextInputStyle.Short).setPlaceholder('Ej: 21:00').setRequired(true).setMaxLength(20)
-      ),
-      new ActionRowBuilder().addComponents(
-        new TextInputBuilder().setCustomId('op_lugar').setLabel('Zona / Ubicación')
-          .setStyle(TextInputStyle.Short).setPlaceholder('Ej: Banco Central, Zona Norte').setRequired(true).setMaxLength(80)
-      ),
-      new ActionRowBuilder().addComponents(
-        new TextInputBuilder().setCustomId('op_descripcion').setLabel('Descripción del operativo')
-          .setStyle(TextInputStyle.Paragraph).setPlaceholder('Detallá objetivo, táctica y lo esperado de cada uno.')
-          .setRequired(true).setMaxLength(500)
-      ),
-      new ActionRowBuilder().addComponents(
-        new TextInputBuilder().setCustomId('op_requisitos').setLabel('Requisitos / Participantes')
-          .setStyle(TextInputStyle.Short).setPlaceholder('Ej: Toda la unidad, mínimo 4 agentes')
-          .setRequired(false).setMaxLength(100)
-      )
+      new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('op_tipo').setLabel('Tipo de operativo').setStyle(TextInputStyle.Short).setPlaceholder('Toma de rehenes, Ingreso táctico, Perímetro').setRequired(true).setMaxLength(60)),
+      new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('op_hora').setLabel('Hora del operativo').setStyle(TextInputStyle.Short).setPlaceholder('21:00').setRequired(true).setMaxLength(20)),
+      new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('op_lugar').setLabel('Zona / Ubicación').setStyle(TextInputStyle.Short).setPlaceholder('Banco Central, Zona Norte').setRequired(true).setMaxLength(80)),
+      new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('op_descripcion').setLabel('Objetivo del operativo').setStyle(TextInputStyle.Paragraph).setPlaceholder('Detallá objetivo, táctica y lo esperado de cada uno.').setRequired(true).setMaxLength(500)),
+      new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('op_requisitos').setLabel('Requisitos / Participantes').setStyle(TextInputStyle.Short).setPlaceholder('Toda la unidad, mínimo 4 agentes').setRequired(false).setMaxLength(100))
     );
     await interaction.showModal(modal);
     return;
@@ -883,103 +778,70 @@ client.on('interactionCreate', async (interaction) => {
   // /geof expulsar
   if (sub === 'expulsar') {
     await interaction.deferReply({ ephemeral: true });
-
     const usuario = interaction.options.getUser('usuario');
     const motivo  = interaction.options.getString('motivo');
-
     try {
       const miembro = await interaction.guild.members.fetch(usuario.id);
-
       if (miembro.roles.cache.has(ROL_DUENO_GEOF)) {
-        await interaction.editReply({ content: '❌ No podés expulsar al **Dueño** del G.E.O.F.' });
+        await interaction.editReply({ embeds: [embedBase(COLOR.RECHAZADO).setTitle('❌ Operación bloqueada').setDescription('No podés expulsar al **Dueño** del G.E.O.F.')] });
         return;
       }
-
-      for (const id of TODOS_ROLES_GEOF) {
-        if (miembro.roles.cache.has(id) && id !== ROL_DUENO_GEOF) {
-          await miembro.roles.remove(id).catch(() => {});
+      for (const rid of TODOS_ROLES_GEOF) {
+        if (miembro.roles.cache.has(rid) && rid !== ROL_DUENO_GEOF) {
+          await miembro.roles.remove(rid).catch(() => {});
         }
       }
-
       const canalUp = await client.channels.fetch(CANAL_UPDATES);
       const embed = new EmbedBuilder()
-        .setTitle('🚫 EXPULSIÓN — G.E.O.F')
-        .setDescription('<@' + usuario.id + '> ha sido **expulsado** del G.E.O.F.')
+        .setAuthor({ name: 'G.E.O.F • Sistema de Bajas' })
+        .setTitle('🚫 EXPULSIÓN CONFIRMADA')
+        .setDescription(`<@${usuario.id}> ha sido separado del **G.E.O.F**.\n${DIV}`)
+        .setColor(COLOR.EXPULSION)
+        .setThumbnail(usuario.displayAvatarURL())
         .addFields(
-          { name: '📋 Motivo',        value: motivo,                                 inline: false },
-          { name: '👮 Expulsado por', value: '<@' + interaction.user.id + '>',       inline: true }
+          { name: '📋 Motivo',       value: `> ${trunc(motivo, 800)}`, inline: false },
+          { name: '👮 Ejecutado por', value: `<@${interaction.user.id}>`, inline: true },
+          { name: '📅 Fecha',         value: `<t:${Math.floor(Date.now() / 1000)}:F>`, inline: true },
+          { name: '\u200B', value: `${DIV}\n> _Todos los roles G.E.O.F fueron removidos._\n> _Este oficial no forma parte de la unidad._`, inline: false }
         )
-        .setColor(COLOR_GEOF_RECHAZAR).setThumbnail(usuario.displayAvatarURL()).setTimestamp()
-        .setFooter({ text: 'G.E.O.F  •  Sistema de Expulsiones' });
-
+        .setTimestamp()
+        .setFooter({ text: 'G.E.O.F • Sistema de Bajas' });
       await canalUp.send({ embeds: [embed] });
-      await interaction.editReply({ content: '✅ **' + miembro.displayName + '** fue expulsado del G.E.O.F.' });
+      await interaction.editReply({ embeds: [embedBase(COLOR.EXITO).setTitle('✅ Expulsión ejecutada').setDescription(`**${miembro.displayName}** fue expulsado del G.E.O.F.`)] });
     } catch (err) {
       console.error('/geof expulsar:', err);
-      try { await interaction.editReply({ content: '❌ Error al expulsar al miembro: ' + (err.message || 'desconocido') }); } catch (e2) {}
+      try { await interaction.editReply({ embeds: [embedBase(COLOR.RECHAZADO).setTitle('❌ Error al expulsar').setDescription(`\`${err.message || 'error desconocido'}\``)] }); } catch (e2) {}
     }
     return;
   }
 });
 
-// ==================== HEALTHCHECK HTTP SERVER ====================
+// ==================== HEALTHCHECK + WATCHDOG ====================
 const http = require('http');
 const HEALTH_PORT = process.env.PORT || 3000;
 http.createServer((req, res) => {
-  const url = req.url || '/';
-  if (url === '/healthcheck' || url === '/health' || url === '/') {
-    const conectado = client.isReady();
-    const status = conectado ? 200 : 503;
-    res.writeHead(status, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ status: conectado ? 'OK' : 'DISCONNECTED', botOnline: conectado, uptime_seconds: Math.floor(process.uptime()) }));
-  } else {
-    res.writeHead(404); res.end('Not Found');
-  }
-}).listen(HEALTH_PORT, () => {
-  console.log('[HEALTH] Servidor HTTP en puerto ' + HEALTH_PORT);
-});
+  if ((req.url || '/') === '/healthcheck' || (req.url || '/') === '/health' || (req.url || '/') === '/') {
+    const ok = client.isReady();
+    res.writeHead(ok ? 200 : 503, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ status: ok ? 'OK' : 'DISCONNECTED', uptime: Math.floor(process.uptime()) }));
+  } else { res.writeHead(404); res.end(); }
+}).listen(HEALTH_PORT, () => console.log('[HEALTH] Servidor HTTP en puerto ' + HEALTH_PORT));
 
-// ==================== WATCHDOG DE AUTO-RECUPERACIÓN ====================
 let desconectadoDesde = null;
 setInterval(() => {
   if (process.uptime() * 1000 < 60000) return;
-  const conectado = client.isReady();
-  if (conectado) {
-    if (desconectadoDesde !== null) {
-      console.log('[WATCHDOG] Reconectado.');
-      desconectadoDesde = null;
-    }
+  if (client.isReady()) {
+    if (desconectadoDesde !== null) { console.log('[WATCHDOG] Reconectado.'); desconectadoDesde = null; }
     return;
   }
-  if (desconectadoDesde === null) {
-    desconectadoDesde = Date.now();
-    console.warn('[WATCHDOG] Bot desconectado. Tolerancia 3 min.');
-    return;
-  }
-  if (Date.now() - desconectadoDesde > 3 * 60 * 1000) {
-    console.error('[WATCHDOG] Matando proceso para reinicio.');
-    process.exit(1);
-  }
+  if (desconectadoDesde === null) { desconectadoDesde = Date.now(); console.warn('[WATCHDOG] Bot desconectado. Tolerancia 3 min.'); return; }
+  if (Date.now() - desconectadoDesde > 3 * 60 * 1000) { console.error('[WATCHDOG] Matando proceso para reinicio.'); process.exit(1); }
 }, 30000);
 
-client.on('shardDisconnect', (event, shardId) => {
-  console.warn('[DISCORD] Shard ' + shardId + ' desconectado. Código: ' + event.code);
-});
-client.on('shardError', (err) => {
-  console.error('[DISCORD] Error en shard:', err.message);
-});
+client.on('shardDisconnect', (event, shardId) => console.warn('[DISCORD] Shard ' + shardId + ' desconectado. Código: ' + event.code));
+client.on('shardError', (err) => console.error('[DISCORD] Error:', err.message));
 
-// Verificar token antes del login
-if (!process.env.TOKEN) {
-  console.error('[FATAL] TOKEN no definida. Configurala en Railway.');
-  process.exit(1);
-}
-
+if (!process.env.TOKEN) { console.error('[FATAL] TOKEN no definida.'); process.exit(1); }
 client.login(process.env.TOKEN)
   .then(() => console.log('[LOGIN] Login OK. Esperando ready...'))
-  .catch((err) => {
-    console.error('[LOGIN] ERROR:', err.message);
-    if (err.message && err.message.includes('TOKEN_INVALID')) {
-      console.error('[LOGIN] >>> Token inválido. Regeneralo en Developer Portal.');
-    }
-  });
+  .catch((err) => console.error('[LOGIN] ERROR:', err.message));
