@@ -250,8 +250,16 @@ client.once('ready', async () => {
 
 // ==================== INTERACTIONS ====================
 client.on('interactionCreate', async (interaction) => {
+  // Log de diagnóstico
+  const tipo = interaction.isChatInputCommand() ? 'SLASH:' + interaction.commandName + (interaction.options.getSubcommand(false) ? '/' + interaction.options.getSubcommand(false) : '')
+    : interaction.isButton() ? 'BUTTON:' + interaction.customId
+    : interaction.isModalSubmit() ? 'MODAL:' + interaction.customId
+    : 'OTHER';
+  console.log('[INTERACTION] ' + tipo + ' por ' + interaction.user.tag + ' en canal ' + interaction.channelId);
+
   // Bloquear interacciones hasta que el bot haya cargado todos los datos
   if (!botListo) {
+    console.warn('[INTERACTION] Rechazada — bot no listo aún');
     try {
       if (interaction.isRepliable()) {
         await interaction.reply({ content: '⏳ El bot todavía está cargando datos. Esperá unos segundos e intentá de nuevo.', ephemeral: true });
