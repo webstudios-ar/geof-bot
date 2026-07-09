@@ -768,6 +768,8 @@ client.on('interactionCreate', async (interaction) => {
       await interaction.reply({ content: '❌ Este comando solo puede usarse en <#' + CANAL_PANEL + '>.', ephemeral: true });
       return;
     }
+    await interaction.deferReply({ ephemeral: true });
+
     const embedPanel = new EmbedBuilder()
       .setTitle('🎯 G.E.O.F — POSTULACIONES ABIERTAS')
       .setDescription('Si querés formar parte del **Grupo Especial de Operaciones Federales**, la unidad táctica de élite de la PFA, este es tu lugar.\n\n' +
@@ -797,10 +799,10 @@ client.on('interactionCreate', async (interaction) => {
     try {
       const canalPanel = await client.channels.fetch(CANAL_PANEL);
       await canalPanel.send({ embeds: [embedPanel], components: [row] });
-      await interaction.reply({ content: '✅ Panel publicado en <#' + CANAL_PANEL + '>.', ephemeral: true });
+      await interaction.editReply({ content: '✅ Panel publicado en <#' + CANAL_PANEL + '>.' });
     } catch (e) {
-      console.error('Panel:', e.message);
-      await interaction.reply({ content: '❌ Error al publicar el panel.', ephemeral: true });
+      console.error('Panel:', e);
+      try { await interaction.editReply({ content: '❌ Error al publicar el panel: ' + (e.message || 'desconocido') }); } catch (e2) {}
     }
     return;
   }
@@ -811,9 +813,11 @@ client.on('interactionCreate', async (interaction) => {
       await interaction.reply({ content: '❌ Este comando solo puede usarse en <#' + CANAL_UPDATES + '>.', ephemeral: true });
       return;
     }
+    await interaction.deferReply({ ephemeral: true });
+
     const usuario = interaction.options.getUser('usuario');
-    const miembro = await interaction.guild.members.fetch(usuario.id);
     try {
+      const miembro = await interaction.guild.members.fetch(usuario.id);
       const rolesAAgregar = [ROL_GEOF, ROL_TACTICO];
       for (const r of rolesAAgregar) {
         if (!miembro.roles.cache.has(r)) await miembro.roles.add(r, 'Ingreso manual al G.E.O.F');
@@ -828,8 +832,11 @@ client.on('interactionCreate', async (interaction) => {
         .setColor(COLOR_GEOF_APROBAR).setThumbnail(usuario.displayAvatarURL()).setTimestamp()
         .setFooter({ text: 'G.E.O.F  •  Sistema de Ingresos' });
       await canalUp.send({ content: '<@' + usuario.id + '>', embeds: [embed] });
-      await interaction.reply({ content: '✅ **' + miembro.displayName + '** ingresado al G.E.O.F.', ephemeral: true });
-    } catch (err) { await interaction.reply({ content: '❌ Error al ingresar al miembro.', ephemeral: true }); }
+      await interaction.editReply({ content: '✅ **' + miembro.displayName + '** ingresado al G.E.O.F.' });
+    } catch (err) {
+      console.error('/geof nuevo:', err);
+      try { await interaction.editReply({ content: '❌ Error al ingresar al miembro: ' + (err.message || 'desconocido') }); } catch (e2) {}
+    }
     return;
   }
 
@@ -867,13 +874,16 @@ client.on('interactionCreate', async (interaction) => {
 
   // /geof expulsar
   if (sub === 'expulsar') {
+    await interaction.deferReply({ ephemeral: true });
+
     const usuario = interaction.options.getUser('usuario');
     const motivo  = interaction.options.getString('motivo');
-    const miembro = await interaction.guild.members.fetch(usuario.id);
 
     try {
+      const miembro = await interaction.guild.members.fetch(usuario.id);
+
       if (miembro.roles.cache.has(ROL_DUENO_GEOF)) {
-        await interaction.reply({ content: '❌ No podés expulsar al **Dueño** del G.E.O.F.', ephemeral: true });
+        await interaction.editReply({ content: '❌ No podés expulsar al **Dueño** del G.E.O.F.' });
         return;
       }
 
@@ -895,10 +905,10 @@ client.on('interactionCreate', async (interaction) => {
         .setFooter({ text: 'G.E.O.F  •  Sistema de Expulsiones' });
 
       await canalUp.send({ embeds: [embed] });
-      await interaction.reply({ content: '✅ **' + miembro.displayName + '** fue expulsado del G.E.O.F.', ephemeral: true });
+      await interaction.editReply({ content: '✅ **' + miembro.displayName + '** fue expulsado del G.E.O.F.' });
     } catch (err) {
-      console.error(err);
-      await interaction.reply({ content: '❌ Error al expulsar al miembro.', ephemeral: true });
+      console.error('/geof expulsar:', err);
+      try { await interaction.editReply({ content: '❌ Error al expulsar al miembro: ' + (err.message || 'desconocido') }); } catch (e2) {}
     }
     return;
   }
