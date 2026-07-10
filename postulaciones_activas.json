@@ -3,6 +3,11 @@
     "inicio": 1783642087643,
     "expiraTs": 1783642987643,
     "expediente": "PST-0001-2026",
-    "datos": {}
+    "datos": {
+      "nombre": "Mokkaz Onward",
+      "rango": "Sargento 1",
+      "disp": "3-4",
+      "diferencia": "que juego demasiado bien"
+    }
   }
 }
