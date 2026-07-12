@@ -3,6 +3,11 @@
     "inicio": 1783833027645,
     "expiraTs": 1783833927645,
     "expediente": "PST-0001-2026",
-    "datos": {}
+    "datos": {
+      "nombre": "Cabez Pimpolla",
+      "rango": "Teniente 1°",
+      "disp": "todos pero de 6 a 10",
+      "diferencia": "Puedo llegar a ayudar en alguna planificacion de algun allanamiento o otra operacion"
+    }
   }
 }
