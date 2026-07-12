@@ -7,7 +7,12 @@
       "nombre": "Cabez Pimpolla",
       "rango": "Teniente 1°",
       "disp": "todos pero de 6 a 10",
-      "diferencia": "Puedo llegar a ayudar en alguna planificacion de algun allanamiento o otra operacion"
+      "diferencia": "Puedo llegar a ayudar en alguna planificacion de algun allanamiento o otra operacion",
+      "nvl": "Por ejemplo yo estoy patrullando y me cierran entre dos camionetas y me dicen bajate o te mato, lo que tendria que hacer es bajarme y seguir los pasos que me digan",
+      "no_amenazar": "porque se supone que al momento de interrogar la \"verdad\" debe salir de manera natural y no forzada",
+      "rehenes": "intento mantener la calma en los secuestradores para llegar a un acuerdo.",
+      "secuestro": "haria lo que me piden los secuestradores pretendiendo que nadie sea asesinado",
+      "ingreso": "intentaria cubrir ventanas y puertas, entrar de manera sincronizada para poder neutralizar la amenaza"
     }
   }
 }
