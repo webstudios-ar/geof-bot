@@ -3,6 +3,11 @@
     "inicio": 1783898686345,
     "expiraTs": 1783899586345,
     "expediente": "PST-0001-2026",
-    "datos": {}
+    "datos": {
+      "nombre": "Manu Rodriguez",
+      "rango": "sargento",
+      "disp": "7 dias de la semana",
+      "diferencia": "me tomo las cosas en serio, soy educado, respeto a todos los que me respetan"
+    }
   }
 }
