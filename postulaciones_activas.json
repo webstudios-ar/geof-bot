@@ -3,6 +3,11 @@
     "inicio": 1783979158051,
     "expiraTs": 1783980058051,
     "expediente": "PST-0001-2026",
-    "datos": {}
+    "datos": {
+      "nombre": "Cabez",
+      "rango": "teniente 1°",
+      "disp": "todos en cierto horario",
+      "diferencia": "puedo aportar creatividad"
+    }
   }
 }
