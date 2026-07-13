@@ -7,7 +7,12 @@
       "nombre": "Cabez",
       "rango": "teniente 1°",
       "disp": "todos en cierto horario",
-      "diferencia": "puedo aportar creatividad"
+      "diferencia": "puedo aportar creatividad",
+      "nvl": "Es no valorar vida, me estan apontando con un arma y yo tengo que levantar las manos y seguir sus ordenes (en caso de no ser un robo con negociacion previa)",
+      "no_amenazar": "el interrogatorio debe ser limpio la informacion debe salir del usuario sin presion, en caso contrario podria mentir por los nervios o omitir detalles",
+      "rehenes": "Haria lo que dicen los secuestradores, poniendo la vida de mis compañeros por delante",
+      "secuestro": "haria todo lo que dicen los secuestradores intentaria eliminar a los sospechosos si no son muchos",
+      "ingreso": "se suelen cubrir puertas y ventanas entrar de manera sincronizada para evitar y neutralizar la amenaza"
     }
   }
 }
