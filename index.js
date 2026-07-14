@@ -905,62 +905,116 @@ client.on('interactionCreate', async (interaction) => {
   if (cmd === 'jerarquia') {
     await interaction.deferReply({ ephemeral: true });
 
-    const rol = (id, fallback) => (id && id !== 'PENDIENTE') ? `<@&${id}>` : `**${fallback}**`;
-
-    const embedIntro = new EmbedBuilder()
-      .setAuthor({ name: 'G.E.O.F • Grupo Especial de Operaciones Federales' })
-      .setTitle('🗂️ ESTRUCTURA Y ÁREAS DEL G.E.O.F')
-      .setColor(COLOR.BASE)
-      .setDescription(
-        `El **G.E.O.F** se organiza en **dos ramas** bajo la conducción del Director.\n\n` +
-        '```\n' +
-        '                 DUEÑO\n' +
-        '                   │\n' +
-        '                DIRECTOR\n' +
-        '          ┌────────┴────────┐\n' +
-        '     OPERACIONES      INTELIGENCIA\n' +
-        '```\n' +
-        `${SEP} **Operaciones** — intervención directa: asaltos, rescates, perímetros.\n` +
-        `${SEP} **Inteligencia** — trabajo previo y posterior: infiltración, análisis, interrogatorios.\n\n` +
-        `> _Ambas ramas se complementan. Inteligencia prepara el terreno; Operaciones ejecuta._`
-      )
-      .setFooter({ text: 'G.E.O.F • Estructura vigente' });
+    // Renderiza mención si el ID está configurado; si no, muestra el nombre en negrita
+    const rol = (id, fallback) => (id && /^\d{17,20}$/.test(id)) ? `<@&${id}>` : `**${fallback}**`;
 
     const embedOps = new EmbedBuilder()
+      .setAuthor({ name: 'G.E.O.F • Grupo Especial de Operaciones Federales' })
       .setTitle('⚔️ RAMA DE OPERACIONES')
       .setColor(COLOR.OPERATIVO)
-      .setDescription(`Intervención táctica directa.\n${DIV}`)
-      .addFields(
-        { name: `👑 ${rol(ROL_DUENO_GEOF, 'Dueño')}`, value: `${SEP} Máxima autoridad del grupo\n${SEP} Define reglas, estructura y cambios importantes\n${SEP} Aprueba ascensos altos y decisiones críticas\n> _Rol administrativo — rara vez participa en operativos._`, inline: false },
-        { name: `🎖️ ${rol(ROL_DIRECTOR_GEOF, 'Director')}`, value: `${SEP} Conduce el grupo en el día a día\n${SEP} Coordina con el alto mando de la PFA\n${SEP} Define estrategia general en operativos grandes\n${SEP} Supervisa **ambas ramas**\n> _Es el líder activo del grupo._`, inline: false },
-        { name: `🎯 ${rol(ROL_COMANDANTE_GEOF, 'Comandante')}`, value: `${SEP} Conducción operativa de la rama\n${SEP} Supervisa a Jefe y Sub Jefe\n${SEP} Autoriza operativos de alto riesgo`, inline: false },
-        { name: `🧠 ${rol(ROL_JEFE_GEOF, 'Jefe')}`, value: `${SEP} Comanda operativos directamente\n${SEP} Asigna roles en campo (franco, táctico, negociador)\n${SEP} Toma decisiones en tiempo real\n> _Es el que manda en campo._`, inline: false },
-        { name: `🧩 ${rol(ROL_SUBJEFE_GEOF, 'Sub Jefe')}`, value: `${SEP} Segundo al mando en operativos\n${SEP} Sustituye al Jefe si no está\n${SEP} Puede liderar operativos pequeños\n> _Es el respaldo del Jefe._`, inline: false },
-        { name: `${DIV}\n🗣️ ${rol(ROL_NEGOCIADOR, 'Negociador')}`, value: `${SEP} Habla con los criminales **durante** la crisis\n${SEP} Busca resolver sin violencia\n${SEP} Maneja rehenes, tiempo y demandas\n${SEP} Informa al Jefe sobre la situación`, inline: false },
-        { name: `🎯 ${rol(ROL_FRANCOTIRADOR, 'Francotirador')}`, value: `${SEP} Cobertura desde puntos elevados\n${SEP} Observación e inteligencia del objetivo\n${SEP} Eliminación a larga distancia\n> _**No dispara sin orden.** Nunca._`, inline: false },
-        { name: `⚔️ ${rol(ROL_TACTICO, 'Táctico')}`, value: `${SEP} Fuerza principal de asalto\n${SEP} Entradas y limpieza de zonas\n${SEP} Protege al Negociador\n${SEP} Ejecuta las órdenes del Jefe\n> _Son el músculo del equipo._`, inline: false }
+      .setDescription(
+        `Responsable de la **intervención táctica directa**: asaltos, rescates, contención de perímetros y resolución de incidentes de alto riesgo.\n\n` +
+        '```\n' +
+        '        DUEÑO\n' +
+        '          │\n' +
+        '       DIRECTOR\n' +
+        '          │\n' +
+        '      COMANDANTE\n' +
+        '          │\n' +
+        '    JEFE / SUB JEFE\n' +
+        '          │\n' +
+        '  NEGOCIADOR · FRANCO · TÁCTICO\n' +
+        '```\n' +
+        `${DIV}\n**◾ CONDUCCIÓN**`
       )
-      .setFooter({ text: 'Rama de Operaciones • G.E.O.F' });
+      .addFields(
+        { name: `👑 ${rol(ROL_DUENO_GEOF, 'Dueño')}`, value:
+          `${SEP} Autoridad máxima de la unidad\n` +
+          `${SEP} Establece la normativa, la estructura y sus modificaciones\n` +
+          `${SEP} Resuelve ascensos de alto rango y decisiones críticas\n` +
+          `> _Función de conducción institucional. No interviene en campo._`, inline: false },
+        { name: `🎖️ ${rol(ROL_DIRECTOR_GEOF, 'Director')}`, value:
+          `${SEP} Conducción efectiva de la unidad\n` +
+          `${SEP} Enlace con el alto mando de la P.F.A.\n` +
+          `${SEP} Define la estrategia general en operativos de envergadura\n` +
+          `${SEP} Supervisa **ambas ramas** de la unidad\n` +
+          `> _Máxima autoridad operativa activa._`, inline: false },
+        { name: `🎯 ${rol(ROL_COMANDANTE_GEOF, 'Comandante')}`, value:
+          `${SEP} Conducción de la rama operativa\n` +
+          `${SEP} Supervisión directa de Jefatura\n` +
+          `${SEP} Autoriza intervenciones de alto riesgo\n` +
+          `> _Nexo entre la Dirección y el mando en campo._`, inline: false },
+        { name: `${DIV}\n**◾ JEFATURA EN CAMPO**\n🧠 ${rol(ROL_JEFE_GEOF, 'Jefe')}`, value:
+          `${SEP} Comanda la intervención en el lugar\n` +
+          `${SEP} Asigna funciones según el escenario\n` +
+          `${SEP} Resuelve en tiempo real y asume la responsabilidad del resultado\n` +
+          `> _La autoridad en el terreno es indiscutible._`, inline: false },
+        { name: `🧩 ${rol(ROL_SUBJEFE_GEOF, 'Sub Jefe')}`, value:
+          `${SEP} Segundo al mando durante la intervención\n` +
+          `${SEP} Asume la conducción en ausencia del Jefe\n` +
+          `${SEP} Apoya la coordinación y el control del equipo\n` +
+          `${SEP} Habilitado para conducir operativos de menor escala`, inline: false },
+        { name: `${DIV}\n**◾ FUNCIONES TÁCTICAS**\n🗣️ ${rol(ROL_NEGOCIADOR, 'Negociador')}`, value:
+          `${SEP} Único habilitado para el diálogo con el agresor\n` +
+          `${SEP} Prioriza la resolución sin uso de la fuerza\n` +
+          `${SEP} Administra demandas, plazos y condición de los rehenes\n` +
+          `${SEP} Mantiene informado al Jefe de forma permanente`, inline: false },
+        { name: `🎯 ${rol(ROL_FRANCOTIRADOR, 'Francotirador')}`, value:
+          `${SEP} Cobertura y observación desde posición elevada\n` +
+          `${SEP} Aporta inteligencia visual del objetivo\n` +
+          `${SEP} Intervención a distancia\n` +
+          `> ⚠️ _**No efectúa disparo sin autorización expresa.** Sin excepción._`, inline: false },
+        { name: `⚔️ ${rol(ROL_TACTICO, 'Táctico')}`, value:
+          `${SEP} Elemento de asalto de la unidad\n` +
+          `${SEP} Ejecuta ingresos y aseguramiento de zonas\n` +
+          `${SEP} Provee protección al Negociador\n` +
+          `${SEP} Cumple las órdenes del Jefe sin dilación`, inline: false }
+      )
+      .setFooter({ text: 'G.E.O.F • Rama de Operaciones' });
 
     const embedIntel = new EmbedBuilder()
       .setTitle('🕵️ RAMA DE INTELIGENCIA')
       .setColor(COLOR.RETIRO)
       .setDescription(
-        `Trabajo previo y posterior al operativo. Reporta directamente al Director.\n\n` +
-        `> _El asalto dura minutos. La inteligencia, semanas._\n${DIV}`
+        `Responsable del **trabajo previo y posterior** a la intervención: infiltración, análisis de organizaciones criminales y obtención de información.\n\n` +
+        '```\n' +
+        '       DIRECTOR\n' +
+        '          │\n' +
+        '     INTELIGENCIA\n' +
+        '          │\n' +
+        'INFILTRADO · ANALISTA · INTERROGADOR\n' +
+        '```\n' +
+        `> _La intervención dura minutos. La inteligencia que la hace posible, semanas._\n${DIV}\n**◾ FUNCIONES**`
       )
       .addFields(
-        { name: `🎭 ${rol(ROL_INFILTRADO, 'Infiltrado')}`, value: `${SEP} Opera con **identidad encubierta** dentro de una organización\n${SEP} Reporta desde adentro mediante canal restringido\n${SEP} **No participa en operativos contra su propia mafia**\n${SEP} Ante una prueba mayor: improvisa; si no puede, pide autorización\n> _Si se quema, extracción inmediata._`, inline: false },
-        { name: `📊 ${rol(ROL_ANALISTA, 'Analista')}`, value: `${SEP} Arma y mantiene los **casos**\n${SEP} Cruza lo que traen los infiltrados con lo que ya se sabe\n${SEP} Mapea vínculos, jerarquías y movimientos\n${SEP} Convierte información suelta en algo accionable\n> _El que ve el patrón antes que nadie._`, inline: false },
-        { name: `🔍 ${rol(ROL_INTERROGADOR, 'Interrogador')}`, value: `${SEP} Actúa **después** de la captura\n${SEP} Obtiene información del detenido\n${SEP} Distinto del Negociador: uno evita muertos, el otro saca datos\n${SEP} Trabaja con lo que el Analista ya tiene del caso`, inline: false },
-        { name: `${DIV}\n📌 Acceso a la rama`, value: `${SEP} **No se postula** — la cúpula elige\n${SEP} Los roles son **acumulables** con la rama operativa\n${SEP} Un Táctico puede ser Analista o Interrogador sin conflicto\n${SEP} La única restricción es la del Infiltrado en campo`, inline: false }
+        { name: `🎭 ${rol(ROL_INFILTRADO, 'Infiltrado')}`, value:
+          `${SEP} Opera bajo **identidad encubierta** dentro de la organización objetivo\n` +
+          `${SEP} Remite información por canal restringido\n` +
+          `${SEP} **Excluido de todo operativo contra la organización que infiltra**\n` +
+          `${SEP} Ante requerimiento comprometedor: procura evadirlo; de no ser viable, eleva consulta\n` +
+          `> ⚠️ _Comprometida la identidad, corresponde extracción inmediata._`, inline: false },
+        { name: `📊 ${rol(ROL_ANALISTA, 'Analista')}`, value:
+          `${SEP} Elabora y mantiene actualizados los **legajos de caso**\n` +
+          `${SEP} Contrasta lo aportado por los infiltrados con antecedentes obrantes\n` +
+          `${SEP} Establece vínculos, jerarquías y patrones de movimiento\n` +
+          `${SEP} Transforma información dispersa en inteligencia accionable`, inline: false },
+        { name: `🔍 ${rol(ROL_INTERROGADOR, 'Interrogador')}`, value:
+          `${SEP} Interviene con posterioridad a la detención\n` +
+          `${SEP} Obtiene información del detenido conforme al protocolo vigente\n` +
+          `${SEP} Función diferenciada del Negociador: uno previene el hecho, el otro lo esclarece\n` +
+          `${SEP} Opera sobre la base del legajo elaborado por el Analista`, inline: false },
+        { name: `${DIV}\n📌 INCORPORACIÓN A LA RAMA`, value:
+          `${SEP} **No se accede por postulación** — la designación es facultad de la cúpula\n` +
+          `${SEP} Las funciones son **compatibles** con la rama operativa\n` +
+          `${SEP} Un Táctico puede desempeñarse como Analista o Interrogador sin conflicto\n` +
+          `${SEP} La única incompatibilidad es la del Infiltrado en campo`, inline: false }
       )
-      .setFooter({ text: 'Rama de Inteligencia • G.E.O.F' })
+      .setFooter({ text: 'G.E.O.F • Rama de Inteligencia' })
       .setTimestamp();
 
     try {
-      await interaction.channel.send({ embeds: [embedIntro, embedOps, embedIntel] });
-      await interaction.editReply({ embeds: [embedBase(COLOR.EXITO).setTitle('✅ Jerarquía publicada').setDescription('La estructura del G.E.O.F fue publicada en este canal.')] });
+      await interaction.channel.send({ embeds: [embedOps, embedIntel] });
+      await interaction.editReply({ embeds: [embedBase(COLOR.EXITO).setTitle('✅ Jerarquía publicada').setDescription('La estructura de la unidad fue publicada en este canal.')] });
     } catch (e) {
       console.error('/jerarquia:', e);
       try { await interaction.editReply({ embeds: [embedBase(COLOR.RECHAZADO).setTitle('❌ Error al publicar').setDescription(`\`${e.message || 'error desconocido'}\``)] }); } catch (e2) {}
