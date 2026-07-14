@@ -29,6 +29,11 @@ const ROL_TACTICO         = '1412986446599557170';
 // --- Base ---
 const ROL_GEOF            = '1384737385551495178';
 
+// --- Inteligencia (rama nueva — completar IDs al crear los roles en Discord) ---
+const ROL_INFILTRADO      = 'PENDIENTE';
+const ROL_ANALISTA        = 'PENDIENTE';
+const ROL_INTERROGADOR    = 'PENDIENTE';
+
 // ==================== GRUPOS DE PERMISOS ====================
 // Alto Mando: Dueño, Director, Comandante
 const ALTO_MANDO = [ROL_DUENO_GEOF, ROL_DIRECTOR_GEOF, ROL_COMANDANTE_GEOF];
@@ -275,6 +280,10 @@ client.once('ready', async () => {
     .setName('normativas')
     .setDescription('[HEAD] Publica la normativa general del G.E.O.F');
 
+  const jerarquiaCmd = new SlashCommandBuilder()
+    .setName('jerarquia')
+    .setDescription('[HEAD] Publica la jerarquía y áreas del G.E.O.F');
+
   const rolesCmd = new SlashCommandBuilder()
     .setName('roles')
     .setDescription('[HEAD] Convoca al G.E.O.F a votar asistencia a un rol/evento')
@@ -301,9 +310,9 @@ client.once('ready', async () => {
 
   try {
     await rest.put(Routes.applicationCommands(client.user.id), {
-      body: [geofCmd.toJSON(), normativasCmd.toJSON(), rolesCmd.toJSON()]
+      body: [geofCmd.toJSON(), normativasCmd.toJSON(), jerarquiaCmd.toJSON(), rolesCmd.toJSON()]
     });
-    console.log('Comandos globales registrados: /geof (nuevo, operativo, expulsar, retiro, panel-postulaciones), /normativas, /roles');
+    console.log('Comandos globales registrados: /geof (nuevo, operativo, expulsar, retiro, panel-postulaciones), /normativas, /jerarquia, /roles');
   } catch (err) { console.error('Error registrando comandos:', err); }
 });
 
@@ -842,7 +851,7 @@ client.on('interactionCreate', async (interaction) => {
   // ==================== SLASH COMMANDS ====================
   if (!interaction.isChatInputCommand()) return;
   const cmd = interaction.commandName;
-  if (cmd !== 'geof' && cmd !== 'normativas' && cmd !== 'roles') return;
+  if (cmd !== 'geof' && cmd !== 'normativas' && cmd !== 'jerarquia' && cmd !== 'roles') return;
 
   const revisor = interaction.member?.displayName || interaction.user.username;
 
@@ -887,6 +896,73 @@ client.on('interactionCreate', async (interaction) => {
       await interaction.editReply({ embeds: [embedBase(COLOR.EXITO).setTitle('✅ Normativa publicada').setDescription('La normativa general fue publicada en este canal.')] });
     } catch (e) {
       console.error('/normativas:', e);
+      try { await interaction.editReply({ embeds: [embedBase(COLOR.RECHAZADO).setTitle('❌ Error al publicar').setDescription(`\`${e.message || 'error desconocido'}\``)] }); } catch (e2) {}
+    }
+    return;
+  }
+
+  // ==================== /jerarquia ====================
+  if (cmd === 'jerarquia') {
+    await interaction.deferReply({ ephemeral: true });
+
+    const rol = (id, fallback) => (id && id !== 'PENDIENTE') ? `<@&${id}>` : `**${fallback}**`;
+
+    const embedIntro = new EmbedBuilder()
+      .setAuthor({ name: 'G.E.O.F • Grupo Especial de Operaciones Federales' })
+      .setTitle('🗂️ ESTRUCTURA Y ÁREAS DEL G.E.O.F')
+      .setColor(COLOR.BASE)
+      .setDescription(
+        `El **G.E.O.F** se organiza en **dos ramas** bajo la conducción del Director.\n\n` +
+        '```\n' +
+        '                 DUEÑO\n' +
+        '                   │\n' +
+        '                DIRECTOR\n' +
+        '          ┌────────┴────────┐\n' +
+        '     OPERACIONES      INTELIGENCIA\n' +
+        '```\n' +
+        `${SEP} **Operaciones** — intervención directa: asaltos, rescates, perímetros.\n` +
+        `${SEP} **Inteligencia** — trabajo previo y posterior: infiltración, análisis, interrogatorios.\n\n` +
+        `> _Ambas ramas se complementan. Inteligencia prepara el terreno; Operaciones ejecuta._`
+      )
+      .setFooter({ text: 'G.E.O.F • Estructura vigente' });
+
+    const embedOps = new EmbedBuilder()
+      .setTitle('⚔️ RAMA DE OPERACIONES')
+      .setColor(COLOR.OPERATIVO)
+      .setDescription(`Intervención táctica directa.\n${DIV}`)
+      .addFields(
+        { name: `👑 ${rol(ROL_DUENO_GEOF, 'Dueño')}`, value: `${SEP} Máxima autoridad del grupo\n${SEP} Define reglas, estructura y cambios importantes\n${SEP} Aprueba ascensos altos y decisiones críticas\n> _Rol administrativo — rara vez participa en operativos._`, inline: false },
+        { name: `🎖️ ${rol(ROL_DIRECTOR_GEOF, 'Director')}`, value: `${SEP} Conduce el grupo en el día a día\n${SEP} Coordina con el alto mando de la PFA\n${SEP} Define estrategia general en operativos grandes\n${SEP} Supervisa **ambas ramas**\n> _Es el líder activo del grupo._`, inline: false },
+        { name: `🎯 ${rol(ROL_COMANDANTE_GEOF, 'Comandante')}`, value: `${SEP} Conducción operativa de la rama\n${SEP} Supervisa a Jefe y Sub Jefe\n${SEP} Autoriza operativos de alto riesgo`, inline: false },
+        { name: `🧠 ${rol(ROL_JEFE_GEOF, 'Jefe')}`, value: `${SEP} Comanda operativos directamente\n${SEP} Asigna roles en campo (franco, táctico, negociador)\n${SEP} Toma decisiones en tiempo real\n> _Es el que manda en campo._`, inline: false },
+        { name: `🧩 ${rol(ROL_SUBJEFE_GEOF, 'Sub Jefe')}`, value: `${SEP} Segundo al mando en operativos\n${SEP} Sustituye al Jefe si no está\n${SEP} Puede liderar operativos pequeños\n> _Es el respaldo del Jefe._`, inline: false },
+        { name: `${DIV}\n🗣️ ${rol(ROL_NEGOCIADOR, 'Negociador')}`, value: `${SEP} Habla con los criminales **durante** la crisis\n${SEP} Busca resolver sin violencia\n${SEP} Maneja rehenes, tiempo y demandas\n${SEP} Informa al Jefe sobre la situación`, inline: false },
+        { name: `🎯 ${rol(ROL_FRANCOTIRADOR, 'Francotirador')}`, value: `${SEP} Cobertura desde puntos elevados\n${SEP} Observación e inteligencia del objetivo\n${SEP} Eliminación a larga distancia\n> _**No dispara sin orden.** Nunca._`, inline: false },
+        { name: `⚔️ ${rol(ROL_TACTICO, 'Táctico')}`, value: `${SEP} Fuerza principal de asalto\n${SEP} Entradas y limpieza de zonas\n${SEP} Protege al Negociador\n${SEP} Ejecuta las órdenes del Jefe\n> _Son el músculo del equipo._`, inline: false }
+      )
+      .setFooter({ text: 'Rama de Operaciones • G.E.O.F' });
+
+    const embedIntel = new EmbedBuilder()
+      .setTitle('🕵️ RAMA DE INTELIGENCIA')
+      .setColor(COLOR.RETIRO)
+      .setDescription(
+        `Trabajo previo y posterior al operativo. Reporta directamente al Director.\n\n` +
+        `> _El asalto dura minutos. La inteligencia, semanas._\n${DIV}`
+      )
+      .addFields(
+        { name: `🎭 ${rol(ROL_INFILTRADO, 'Infiltrado')}`, value: `${SEP} Opera con **identidad encubierta** dentro de una organización\n${SEP} Reporta desde adentro mediante canal restringido\n${SEP} **No participa en operativos contra su propia mafia**\n${SEP} Ante una prueba mayor: improvisa; si no puede, pide autorización\n> _Si se quema, extracción inmediata._`, inline: false },
+        { name: `📊 ${rol(ROL_ANALISTA, 'Analista')}`, value: `${SEP} Arma y mantiene los **casos**\n${SEP} Cruza lo que traen los infiltrados con lo que ya se sabe\n${SEP} Mapea vínculos, jerarquías y movimientos\n${SEP} Convierte información suelta en algo accionable\n> _El que ve el patrón antes que nadie._`, inline: false },
+        { name: `🔍 ${rol(ROL_INTERROGADOR, 'Interrogador')}`, value: `${SEP} Actúa **después** de la captura\n${SEP} Obtiene información del detenido\n${SEP} Distinto del Negociador: uno evita muertos, el otro saca datos\n${SEP} Trabaja con lo que el Analista ya tiene del caso`, inline: false },
+        { name: `${DIV}\n📌 Acceso a la rama`, value: `${SEP} **No se postula** — la cúpula elige\n${SEP} Los roles son **acumulables** con la rama operativa\n${SEP} Un Táctico puede ser Analista o Interrogador sin conflicto\n${SEP} La única restricción es la del Infiltrado en campo`, inline: false }
+      )
+      .setFooter({ text: 'Rama de Inteligencia • G.E.O.F' })
+      .setTimestamp();
+
+    try {
+      await interaction.channel.send({ embeds: [embedIntro, embedOps, embedIntel] });
+      await interaction.editReply({ embeds: [embedBase(COLOR.EXITO).setTitle('✅ Jerarquía publicada').setDescription('La estructura del G.E.O.F fue publicada en este canal.')] });
+    } catch (e) {
+      console.error('/jerarquia:', e);
       try { await interaction.editReply({ embeds: [embedBase(COLOR.RECHAZADO).setTitle('❌ Error al publicar').setDescription(`\`${e.message || 'error desconocido'}\``)] }); } catch (e2) {}
     }
     return;
