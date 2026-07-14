@@ -14,29 +14,51 @@ const CANAL_APROBACION  = '1526648981848064214'; // canal de resultados: recibe 
 const CANAL_UPDATES     = '1493838384416952392';
 const CANAL_OPERATIVOS  = '1460758338387050550';
 
-const ROL_GEOF          = '1384737385551495178';
-const ROL_TACTICO       = '1412986446599557170';
-const ROL_MIEMBRO_GEOF  = '1474252638832033884';
-const ROL_DUENO_GEOF    = '1474513244084371697';
+// ==================== JERARQUÍA G.E.O.F ====================
+// --- Alto Mando ---
+const ROL_DUENO_GEOF      = '1474513244084371697';
+const ROL_DIRECTOR_GEOF   = '1459343404155670710';
+const ROL_COMANDANTE_GEOF = '1384748336447361085';
+// --- Jefatura ---
+const ROL_JEFE_GEOF       = '1457168018269278402';
+const ROL_SUBJEFE_GEOF    = '1412987223086731336';
+// --- Especialidades ---
+const ROL_NEGOCIADOR      = '1384748836978823300';
+const ROL_FRANCOTIRADOR   = '1384748893362983005';
+const ROL_TACTICO         = '1412986446599557170';
+// --- Base ---
+const ROL_GEOF            = '1384737385551495178';
 
-const ROLES_AUTORIZADOS = [
-  '1474513244084371697',
-  '1459343404155670710',
-  '1384748336447361085',
-  '1457168018269278402',
-  '1412987223086731336'
-];
+// ==================== GRUPOS DE PERMISOS ====================
+// Alto Mando: Dueño, Director, Comandante
+const ALTO_MANDO = [ROL_DUENO_GEOF, ROL_DIRECTOR_GEOF, ROL_COMANDANTE_GEOF];
 
+// Jefatura: Alto Mando + Jefe + Sub Jefe
+// → decisiones de jerarquía: ingresos, bajas, panel, normativas, evaluar postulaciones
+const JEFATURA = [...ALTO_MANDO, ROL_JEFE_GEOF, ROL_SUBJEFE_GEOF];
+
+// Operativos: Jefatura + especialidades (Negociador, Francotirador, Táctico)
+// → convocatorias: /geof operativo, /roles
+const MANDO_OPERATIVO = [...JEFATURA, ROL_NEGOCIADOR, ROL_FRANCOTIRADOR, ROL_TACTICO];
+
+// Alias legacy: quien evalúa postulaciones y recibe la mención del expediente
+const ROLES_AUTORIZADOS = JEFATURA;
+
+// Todos los roles de la unidad — se remueven al expulsar/retirar
 const TODOS_ROLES_GEOF = [
-  '1384737385551495178',
-  '1412986446599557170',
-  '1474252638832033884',
-  '1474513244084371697',
-  '1459343404155670710',
-  '1384748336447361085',
-  '1457168018269278402',
-  '1412987223086731336'
+  ROL_DUENO_GEOF,
+  ROL_DIRECTOR_GEOF,
+  ROL_COMANDANTE_GEOF,
+  ROL_JEFE_GEOF,
+  ROL_SUBJEFE_GEOF,
+  ROL_NEGOCIADOR,
+  ROL_FRANCOTIRADOR,
+  ROL_TACTICO,
+  ROL_GEOF
 ];
+
+// Helper de permisos
+const tienePermiso = (member, grupo) => grupo.some(r => member.roles.cache.has(r));
 
 const TIEMPO_MAX_POSTULACION_MS = 15 * 60 * 1000;
 const COOLDOWN_POSTULACION_MS   = 24 * 60 * 60 * 1000;
@@ -550,7 +572,7 @@ client.on('interactionCreate', async (interaction) => {
         await interaction.reply({ embeds: [embedBase(COLOR.RECHAZADO).setTitle('❌ Votación no encontrada').setDescription('Esta votación ya no está registrada.')], ephemeral: true });
         return;
       }
-      const tieneRol = ROLES_AUTORIZADOS.some(r => interaction.member.roles.cache.has(r));
+      const tieneRol = tienePermiso(interaction.member, JEFATURA);
       if (!tieneRol) {
         await interaction.reply({ embeds: [embedBase(COLOR.RECHAZADO).setTitle('❌ Sin permisos').setDescription('Solo la oficialidad puede cerrar la votación.')], ephemeral: true });
         return;
@@ -584,7 +606,7 @@ client.on('interactionCreate', async (interaction) => {
         await interaction.reply({ embeds: [embed], ephemeral: true });
         return;
       }
-      if (interaction.member.roles.cache.has(ROL_GEOF) || interaction.member.roles.cache.has(ROL_TACTICO) || interaction.member.roles.cache.has(ROL_MIEMBRO_GEOF)) {
+      if (TODOS_ROLES_GEOF.some(r => interaction.member.roles.cache.has(r))) {
         const embed = embedBase(COLOR.RECHAZADO)
           .setAuthor({ name: 'G.E.O.F • Postulación Rechazada' })
           .setTitle('❌ Ya sos parte del G.E.O.F')
@@ -681,7 +703,7 @@ client.on('interactionCreate', async (interaction) => {
 
     // APROBAR / RECHAZAR
     if (id.startsWith('ap_') || id.startsWith('re_')) {
-      const tieneRol = ROLES_AUTORIZADOS.some(r => interaction.member.roles.cache.has(r));
+      const tieneRol = tienePermiso(interaction.member, JEFATURA);
       if (!tieneRol) {
         await interaction.reply({ embeds: [embedBase(COLOR.RECHAZADO).setTitle('❌ Sin permisos').setDescription('No estás autorizado para evaluar postulaciones.')], ephemeral: true });
         return;
@@ -822,12 +844,18 @@ client.on('interactionCreate', async (interaction) => {
   const cmd = interaction.commandName;
   if (cmd !== 'geof' && cmd !== 'normativas' && cmd !== 'roles') return;
 
-  const tieneRol = ROLES_AUTORIZADOS.some(r => interaction.member.roles.cache.has(r));
   const revisor = interaction.member?.displayName || interaction.user.username;
 
-  // Gate de permisos compartido para los tres comandos (reservados a la oficialidad)
-  if (!tieneRol) {
-    await interaction.reply({ embeds: [embedBase(COLOR.RECHAZADO).setTitle('❌ Sin permisos').setDescription('Este comando está reservado a la oficialidad del G.E.O.F.')], ephemeral: true });
+  // Gate de permisos por comando según jerarquía
+  const sub = interaction.commandName === 'geof' ? interaction.options.getSubcommand() : null;
+  const esOperativo = (interaction.commandName === 'roles') || (sub === 'operativo');
+  const grupoRequerido = esOperativo ? MANDO_OPERATIVO : JEFATURA;
+
+  if (!tienePermiso(interaction.member, grupoRequerido)) {
+    const desc = esOperativo
+      ? 'Este comando requiere ser parte de la **Jefatura** o tener una **especialidad** (Negociador, Francotirador o Táctico).'
+      : 'Este comando está reservado a la **Jefatura del G.E.O.F** (Sub Jefe o superior).';
+    await interaction.reply({ embeds: [embedBase(COLOR.RECHAZADO).setTitle('❌ Sin permisos').setDescription(desc)], ephemeral: true });
     return;
   }
 
@@ -892,7 +920,6 @@ client.on('interactionCreate', async (interaction) => {
   }
 
   // ==================== /geof (subcomandos) ====================
-  const sub = interaction.options.getSubcommand();
 
   // /geof panel-postulaciones
   if (sub === 'panel-postulaciones') {
@@ -1019,6 +1046,10 @@ client.on('interactionCreate', async (interaction) => {
 
   // /geof retiro — baja voluntaria
   if (sub === 'retiro') {
+    if (interaction.channelId !== CANAL_UPDATES) {
+      await interaction.reply({ embeds: [embedBase(COLOR.ADVERTENCIA).setTitle('⚠️ Canal incorrecto').setDescription(`Este comando solo puede usarse en <#${CANAL_UPDATES}>.`)], ephemeral: true });
+      return;
+    }
     await interaction.deferReply({ ephemeral: true });
     const usuario = interaction.options.getUser('usuario');
     const motivo  = interaction.options.getString('motivo');
