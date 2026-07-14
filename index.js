@@ -256,6 +256,19 @@ client.once('ready', async () => {
     .addStringOption(o => o.setName('detalle').setDescription('Detalle: horario, ubicación, reglas...').setRequired(false).setMaxLength(1500));
 
   const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
+
+  // ⚠️ LIMPIEZA DE UNA SOLA VEZ: borra los comandos fantasma registrados por GUILD
+  // (/expulsar, /expulsar-geof, /operacion, /setup-geof). Se activa con la variable
+  // de entorno LIMPIAR_GUILD=1 en Railway. Una vez limpiado, borrá esa variable.
+  if (process.env.LIMPIAR_GUILD === '1' && process.env.GUILD_ID) {
+    try {
+      const actuales = await rest.get(Routes.applicationGuildCommands(client.user.id, process.env.GUILD_ID));
+      console.log(`[LIMPIEZA] Comandos de guild encontrados (${actuales.length}): ${actuales.map(c => c.name).join(', ')}`);
+      await rest.put(Routes.applicationGuildCommands(client.user.id, process.env.GUILD_ID), { body: [] });
+      console.log('[LIMPIEZA] ✅ Comandos de guild eliminados. Ya podés borrar la variable LIMPIAR_GUILD en Railway.');
+    } catch (e) { console.error('[LIMPIEZA] Error borrando comandos de guild:', e.message); }
+  }
+
   try {
     await rest.put(Routes.applicationCommands(client.user.id), {
       body: [geofCmd.toJSON(), normativasCmd.toJSON(), rolesCmd.toJSON()]
