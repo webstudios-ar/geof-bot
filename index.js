@@ -48,6 +48,7 @@ const COLOR = {
   APROBADO:    0xD4AC0D, // dorado militar (aprobación, ingreso)
   RECHAZADO:   0xC0392B, // rojo carmesí (rechazo)
   EXPULSION:   0x1C1C1C, // negro puro (expulsión)
+  RETIRO:      0x5D6D7E, // gris acero (retiro voluntario, baja honorable)
   OPERATIVO:   0xE74C3C, // rojo alerta operativa
   EXITO:       0x27AE60, // verde éxito (paso completado)
   ADVERTENCIA: 0xF39C12, // ámbar (aviso)
@@ -243,6 +244,9 @@ client.once('ready', async () => {
     .addSubcommand(s => s.setName('expulsar').setDescription('[HEAD] Expulsa a un miembro del G.E.O.F')
       .addUserOption(o => o.setName('usuario').setDescription('El usuario a expulsar').setRequired(true))
       .addStringOption(o => o.setName('motivo').setDescription('Motivo de la expulsión').setRequired(true)))
+    .addSubcommand(s => s.setName('retiro').setDescription('[HEAD] Registra el retiro voluntario de un miembro del G.E.O.F')
+      .addUserOption(o => o.setName('usuario').setDescription('El usuario que se retira').setRequired(true))
+      .addStringOption(o => o.setName('motivo').setDescription('Motivo del retiro (opcional)').setRequired(false)))
     .addSubcommand(s => s.setName('panel-postulaciones').setDescription('[HEAD] Publica el panel de convocatoria'));
 
   const normativasCmd = new SlashCommandBuilder()
@@ -257,23 +261,27 @@ client.once('ready', async () => {
 
   const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
 
-  // ⚠️ LIMPIEZA DE UNA SOLA VEZ: borra los comandos fantasma registrados por GUILD
-  // (/expulsar, /expulsar-geof, /operacion, /setup-geof). Se activa con la variable
-  // de entorno LIMPIAR_GUILD=1 en Railway. Una vez limpiado, borrá esa variable.
-  if (process.env.LIMPIAR_GUILD === '1' && process.env.GUILD_ID) {
-    try {
-      const actuales = await rest.get(Routes.applicationGuildCommands(client.user.id, process.env.GUILD_ID));
-      console.log(`[LIMPIEZA] Comandos de guild encontrados (${actuales.length}): ${actuales.map(c => c.name).join(', ')}`);
-      await rest.put(Routes.applicationGuildCommands(client.user.id, process.env.GUILD_ID), { body: [] });
-      console.log('[LIMPIEZA] ✅ Comandos de guild eliminados. Ya podés borrar la variable LIMPIAR_GUILD en Railway.');
-    } catch (e) { console.error('[LIMPIEZA] Error borrando comandos de guild:', e.message); }
-  }
+  // Borra comandos fantasma registrados por GUILD (/expulsar, /expulsar-geof, /operacion, /setup-geof).
+  // Corre en cada arranque: si no hay nada que borrar, no hace nada. Los comandos buenos son
+  // globales, así que esto NO los toca.
+  try {
+    for (const [gid] of client.guilds.cache) {
+      const actuales = await rest.get(Routes.applicationGuildCommands(client.user.id, gid));
+      if (actuales.length > 0) {
+        console.log(`[LIMPIEZA] Guild ${gid} — fantasma encontrados (${actuales.length}): ${actuales.map(c => c.name).join(', ')}`);
+        await rest.put(Routes.applicationGuildCommands(client.user.id, gid), { body: [] });
+        console.log(`[LIMPIEZA] ✅ Borrados de guild ${gid}.`);
+      } else {
+        console.log(`[LIMPIEZA] Guild ${gid} — sin comandos de guild (limpio).`);
+      }
+    }
+  } catch (e) { console.error('[LIMPIEZA] Error:', e.message); }
 
   try {
     await rest.put(Routes.applicationCommands(client.user.id), {
       body: [geofCmd.toJSON(), normativasCmd.toJSON(), rolesCmd.toJSON()]
     });
-    console.log('Comandos registrados (viejos borrados): /geof, /normativas, /roles');
+    console.log('Comandos globales registrados: /geof (nuevo, operativo, expulsar, retiro, panel-postulaciones), /normativas, /roles');
   } catch (err) { console.error('Error registrando comandos:', err); }
 });
 
@@ -989,7 +997,7 @@ client.on('interactionCreate', async (interaction) => {
       const embed = new EmbedBuilder()
         .setAuthor({ name: 'G.E.O.F • Sistema de Bajas' })
         .setTitle('🚫 EXPULSIÓN CONFIRMADA')
-        .setDescription(`<@${usuario.id}> ha sido separado del **G.E.O.F**.\n${DIV}`)
+        .setDescription(`<@${usuario.id}> ha sido expulsado del **G.E.O.F**.\n${DIV}`)
         .setColor(COLOR.EXPULSION)
         .setThumbnail(usuario.displayAvatarURL())
         .addFields(
@@ -1005,6 +1013,53 @@ client.on('interactionCreate', async (interaction) => {
     } catch (err) {
       console.error('/geof expulsar:', err);
       try { await interaction.editReply({ embeds: [embedBase(COLOR.RECHAZADO).setTitle('❌ Error al expulsar').setDescription(`\`${err.message || 'error desconocido'}\``)] }); } catch (e2) {}
+    }
+    return;
+  }
+
+  // /geof retiro — baja voluntaria
+  if (sub === 'retiro') {
+    await interaction.deferReply({ ephemeral: true });
+    const usuario = interaction.options.getUser('usuario');
+    const motivo  = interaction.options.getString('motivo');
+    try {
+      const miembro = await interaction.guild.members.fetch(usuario.id);
+      if (miembro.roles.cache.has(ROL_DUENO_GEOF)) {
+        await interaction.editReply({ embeds: [embedBase(COLOR.RECHAZADO).setTitle('❌ Operación bloqueada').setDescription('No podés registrar el retiro del **Dueño** del G.E.O.F.')] });
+        return;
+      }
+      const teniaRoles = TODOS_ROLES_GEOF.some(rid => miembro.roles.cache.has(rid));
+      if (!teniaRoles) {
+        await interaction.editReply({ embeds: [embedBase(COLOR.ADVERTENCIA).setTitle('⚠️ No es miembro').setDescription(`**${miembro.displayName}** no tiene roles del G.E.O.F.`)] });
+        return;
+      }
+      for (const rid of TODOS_ROLES_GEOF) {
+        if (miembro.roles.cache.has(rid) && rid !== ROL_DUENO_GEOF) {
+          await miembro.roles.remove(rid, 'Retiro voluntario del G.E.O.F').catch(() => {});
+        }
+      }
+      const canalUp = await client.channels.fetch(CANAL_UPDATES);
+      const campos = [];
+      if (motivo && motivo.trim()) campos.push({ name: '📋 Motivo', value: `> ${trunc(motivo, 800)}`, inline: false });
+      campos.push(
+        { name: '👮 Registrado por', value: `<@${interaction.user.id}>`, inline: true },
+        { name: '📅 Fecha',          value: `<t:${Math.floor(Date.now() / 1000)}:F>`, inline: true },
+        { name: '\u200B', value: `${DIV}\n> _Todos los roles G.E.O.F fueron removidos._\n> _Se agradece el servicio prestado a la unidad._`, inline: false }
+      );
+      const embed = new EmbedBuilder()
+        .setAuthor({ name: 'G.E.O.F • Sistema de Bajas' })
+        .setTitle('📤 RETIRO VOLUNTARIO')
+        .setDescription(`<@${usuario.id}> se ha retirado del **G.E.O.F**.\n${DIV}`)
+        .setColor(COLOR.RETIRO)
+        .setThumbnail(usuario.displayAvatarURL())
+        .addFields(...campos)
+        .setTimestamp()
+        .setFooter({ text: 'G.E.O.F • Sistema de Bajas' });
+      await canalUp.send({ embeds: [embed] });
+      await interaction.editReply({ embeds: [embedBase(COLOR.EXITO).setTitle('✅ Retiro registrado').setDescription(`Se registró el retiro voluntario de **${miembro.displayName}**.`)] });
+    } catch (err) {
+      console.error('/geof retiro:', err);
+      try { await interaction.editReply({ embeds: [embedBase(COLOR.RECHAZADO).setTitle('❌ Error al registrar retiro').setDescription(`\`${err.message || 'error desconocido'}\``)] }); } catch (e2) {}
     }
     return;
   }
