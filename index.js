@@ -8,10 +8,24 @@ const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBit
 
 // ==================== SUPABASE ====================
 const { createClient } = require('@supabase/supabase-js');
-const db = (process.env.SUPABASE_URL && process.env.SUPABASE_KEY)
-  ? createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY, { auth: { persistSession: false } })
-  : null;
-if (!db) console.warn('[SUPABASE] SUPABASE_URL o SUPABASE_KEY no definidas — los comandos de legajos no van a funcionar.');
+// El bot sólo hace queries; Realtime no se usa. En Node 20 createClient puede fallar
+// al buscar un WebSocket nativo, así que se envuelve: si revienta, el bot arranca igual
+// y sólo quedan deshabilitados los comandos de legajos.
+let db = null;
+if (process.env.SUPABASE_URL && process.env.SUPABASE_KEY) {
+  try {
+    db = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY, {
+      auth: { persistSession: false, autoRefreshToken: false },
+      global: { headers: { 'X-Client-Info': 'geof-bot' } }
+    });
+    console.log('[SUPABASE] Conectado.');
+  } catch (e) {
+    console.error('[SUPABASE] No se pudo inicializar:', e.message);
+    console.error('[SUPABASE] Los comandos /mafia y /legajo no van a funcionar. Verificá que Railway use Node 22+.');
+  }
+} else {
+  console.warn('[SUPABASE] SUPABASE_URL o SUPABASE_KEY no definidas — los comandos de legajos no van a funcionar.');
+}
 
 // ==================== CONFIGURACIÓN ====================
 const GITHUB_REPO       = 'webstudios-ar/geof-bot';
