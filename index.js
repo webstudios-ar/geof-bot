@@ -1041,14 +1041,24 @@ client.on('interactionCreate', async (interaction) => {
       .setFooter({ text: 'G.E.O.F • V — Régimen disciplinario' })
       .setTimestamp();
 
-    const embeds = [embedUnidad, embedIngreso, embedOperaciones, embedInteligencia, embedSanciones];
-    for (const e of embeds) {
-      const len = (e.data.description || '').length;
-      if (len > 4096) console.warn(`[NORMATIVAS] Embed "${e.data.title}" excede 4096 (${len}).`);
+    // Discord limita a 6000 caracteres la SUMA de todos los embeds de UN mensaje.
+    // Los cinco juntos dan ~6800, así que se envían en dos tandas.
+    const tanda1 = [embedUnidad, embedIngreso, embedOperaciones];
+    const tanda2 = [embedInteligencia, embedSanciones];
+
+    const pesar = (arr) => arr.reduce((n, e) => {
+      const d = e.data;
+      return n + (d.title || '').length + (d.description || '').length
+               + (d.footer?.text || '').length + (d.author?.name || '').length;
+    }, 0);
+    for (const [i, t] of [tanda1, tanda2].entries()) {
+      const p = pesar(t);
+      if (p > 6000) console.warn(`[NORMATIVAS] Tanda ${i + 1} pesa ${p}/6000 — Discord la va a rechazar.`);
     }
 
     try {
-      await interaction.channel.send({ embeds, allowedMentions: { parse: [] } });
+      await interaction.channel.send({ embeds: tanda1, allowedMentions: { parse: [] } });
+      await interaction.channel.send({ embeds: tanda2, allowedMentions: { parse: [] } });
       await interaction.editReply({ embeds: [embedBase(COLOR.EXITO).setTitle('✅ Normativa publicada').setDescription('La normativa interna fue publicada en este canal.')] });
     } catch (e) {
       console.error('/normativas:', e);
@@ -1129,8 +1139,6 @@ client.on('interactionCreate', async (interaction) => {
     const intelDesc =
       `Responsable del **trabajo previo y posterior** a la intervención: infiltración, análisis de organizaciones criminales y obtención de información.\n\n` +
       '```\n' +
-      '         DIRECTOR\n' +
-      '            │\n' +
       '            INTELIGENCIA\n' +
       '                  │\n' +
       'INFILTRADO · ANALISTA · INTERROGADOR\n' +
