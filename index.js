@@ -321,7 +321,7 @@ function embedMafia(m, integrantes = []) {
     );
 
   const campos = [];
-  if (m.zona)      campos.push({ name: '📍 Zona', value: '```' + trunc(m.zona, 60) + '```', inline: true });
+  if (m.cp !== null && m.cp !== undefined) campos.push({ name: '📮 C.P. Sede', value: '```' + m.cp + '```', inline: true });
   if (m.actividad) campos.push({ name: '🔫 Actividad', value: '```' + trunc(m.actividad, 60) + '```', inline: true });
   if (campos.length === 1) campos.push({ name: '\u200B', value: '\u200B', inline: true });
 
@@ -454,16 +454,16 @@ client.once('ready', async () => {
     .setDescription('Legajos de organizaciones criminales')
     .addSubcommand(s => s.setName('crear').setDescription('[INTEL] Abre el legajo de una organización')
       .addStringOption(o => o.setName('nombre').setDescription('Nombre de la organización').setRequired(true).setMaxLength(80))
-      .addStringOption(o => o.setName('zona').setDescription('Zona o territorio').setMaxLength(60))
+      .addIntegerOption(o => o.setName('cp').setDescription('Código postal de la sede (solo números)').setMinValue(0).setMaxValue(9999))
       .addStringOption(o => o.setName('actividad').setDescription('Actividad principal').setMaxLength(60))
       .addStringOption(o => o.setName('estado').setDescription('Estado del caso')
         .addChoices({ name: '🟢 Activa', value: 'activa' }, { name: '🟡 En observación', value: 'observacion' }, { name: '⚫ Desarticulada', value: 'desarticulada' }))
       .addStringOption(o => o.setName('notas').setDescription('Observaciones iniciales').setMaxLength(900)))
     .addSubcommand(s => s.setName('info').setDescription('[INTEL] Consulta un legajo')
-      .addStringOption(o => o.setName('buscar').setDescription('Nombre o expediente (MAF-0001-2026)').setRequired(true)))
+      .addStringOption(o => o.setName('buscar').setDescription('Elegí de la lista o escribí para filtrar').setRequired(true).setAutocomplete(true)))
     .addSubcommand(s => s.setName('actualizar').setDescription('[INTEL] Actualiza un legajo existente')
-      .addStringOption(o => o.setName('buscar').setDescription('Nombre o expediente').setRequired(true))
-      .addStringOption(o => o.setName('zona').setDescription('Nueva zona').setMaxLength(60))
+      .addStringOption(o => o.setName('buscar').setDescription('Elegí de la lista o escribí para filtrar').setRequired(true).setAutocomplete(true))
+      .addIntegerOption(o => o.setName('cp').setDescription('Nuevo código postal').setMinValue(0).setMaxValue(9999))
       .addStringOption(o => o.setName('actividad').setDescription('Nueva actividad').setMaxLength(60))
       .addStringOption(o => o.setName('estado').setDescription('Nuevo estado')
         .addChoices({ name: '🟢 Activa', value: 'activa' }, { name: '🟡 En observación', value: 'observacion' }, { name: '⚫ Desarticulada', value: 'desarticulada' }))
@@ -476,17 +476,17 @@ client.once('ready', async () => {
     .addSubcommand(s => s.setName('crear').setDescription('[INTEL] Abre el legajo de una persona')
       .addStringOption(o => o.setName('nombre').setDescription('Nombre IC').setRequired(true).setMaxLength(80))
       .addStringOption(o => o.setName('alias').setDescription('Alias o apodo').setMaxLength(60))
-      .addStringOption(o => o.setName('organizacion').setDescription('Organización (nombre o expediente MAF-)').setMaxLength(80))
+      .addStringOption(o => o.setName('organizacion').setDescription('Elegí la organización de la lista').setAutocomplete(true))
       .addStringOption(o => o.setName('rango').setDescription('Rango dentro de la organización').setMaxLength(60))
       .addStringOption(o => o.setName('estado').setDescription('Situación')
         .addChoices({ name: '🟢 Libre', value: 'libre' }, { name: '🔵 Detenido', value: 'detenido' }, { name: '🔴 Prófugo', value: 'profugo' }, { name: '⚫ Muerto', value: 'muerto' }))
       .addStringOption(o => o.setName('notas').setDescription('Observaciones iniciales').setMaxLength(900)))
     .addSubcommand(s => s.setName('info').setDescription('[INTEL] Consulta un legajo')
-      .addStringOption(o => o.setName('buscar').setDescription('Nombre, alias o expediente (LEG-0001-2026)').setRequired(true)))
+      .addStringOption(o => o.setName('buscar').setDescription('Elegí de la lista o escribí para filtrar').setRequired(true).setAutocomplete(true)))
     .addSubcommand(s => s.setName('actualizar').setDescription('[INTEL] Actualiza un legajo existente')
-      .addStringOption(o => o.setName('buscar').setDescription('Nombre o expediente').setRequired(true))
+      .addStringOption(o => o.setName('buscar').setDescription('Elegí de la lista o escribí para filtrar').setRequired(true).setAutocomplete(true))
       .addStringOption(o => o.setName('alias').setDescription('Nuevo alias').setMaxLength(60))
-      .addStringOption(o => o.setName('organizacion').setDescription('Vincular a organización (nombre o MAF-)').setMaxLength(80))
+      .addStringOption(o => o.setName('organizacion').setDescription('Vincular a organización').setAutocomplete(true))
       .addStringOption(o => o.setName('rango').setDescription('Nuevo rango').setMaxLength(60))
       .addStringOption(o => o.setName('estado').setDescription('Nueva situación')
         .addChoices({ name: '🟢 Libre', value: 'libre' }, { name: '🔵 Detenido', value: 'detenido' }, { name: '🔴 Prófugo', value: 'profugo' }, { name: '⚫ Muerto', value: 'muerto' }))
@@ -521,6 +521,37 @@ client.once('ready', async () => {
 
 // ==================== INTERACTIONS ====================
 client.on('interactionCreate', async (interaction) => {
+  // ==================== AUTOCOMPLETADO ====================
+  // Va primero: Discord da sólo 3 segundos para responder y no admite defer.
+  if (interaction.isAutocomplete()) {
+    if (!db) { await interaction.respond([]).catch(() => {}); return; }
+    try {
+      const foco = interaction.options.getFocused(true);
+      const q = (foco.value || '').trim();
+      const tabla = (interaction.commandName === 'mafia' || foco.name === 'organizacion') ? 'organizaciones' : 'personas';
+
+      let sel = db.from(tabla).select('expediente,nombre,alias,estado').order('nombre').limit(25);
+      if (q) sel = sel.or(`nombre.ilike.%${q}%,expediente.ilike.%${q}%,alias.ilike.%${q}%`);
+      const { data, error } = await sel;
+      if (error) { await interaction.respond([]).catch(() => {}); return; }
+
+      const mapa = tabla === 'organizaciones' ? EST_MAFIA : EST_PERSONA;
+      const opciones = (data || []).map(r => {
+        const e = mapa[r.estado] || Object.values(mapa)[0];
+        const alias = r.alias ? ` "${r.alias}"` : '';
+        return {
+          name: trunc(`${e.emoji} ${r.nombre}${alias} · ${r.expediente}`, 100),
+          value: r.expediente
+        };
+      });
+      await interaction.respond(opciones).catch(() => {});
+    } catch (e) {
+      console.error('[AUTOCOMPLETE]', e.message);
+      await interaction.respond([]).catch(() => {});
+    }
+    return;
+  }
+
   const tipo = interaction.isChatInputCommand() ? 'SLASH:' + interaction.commandName + (interaction.options.getSubcommand(false) ? '/' + interaction.options.getSubcommand(false) : '')
     : interaction.isButton() ? 'BUTTON:' + interaction.customId
     : interaction.isModalSubmit() ? 'MODAL:' + interaction.customId : 'OTHER';
@@ -1083,7 +1114,7 @@ client.on('interactionCreate', async (interaction) => {
         const expediente = await nuevoExpediente('MAF');
         const { data, error } = await db.from('organizaciones').insert({
           expediente, nombre,
-          zona:      interaction.options.getString('zona'),
+          cp:        interaction.options.getInteger('cp'),
           actividad: interaction.options.getString('actividad'),
           estado:    interaction.options.getString('estado') || 'activa',
           notas:     interaction.options.getString('notas'),
@@ -1116,10 +1147,12 @@ client.on('interactionCreate', async (interaction) => {
           return;
         }
         const cambios = { actualizado_en: new Date().toISOString() };
-        for (const f of ['zona', 'actividad', 'estado', 'notas']) {
+        for (const f of ['actividad', 'estado', 'notas']) {
           const v = interaction.options.getString(f);
           if (v !== null) cambios[f] = v;
         }
+        const cpNuevo = interaction.options.getInteger('cp');
+        if (cpNuevo !== null) cambios.cp = cpNuevo;
         const sumar = interaction.options.getString('sumar_nota');
         if (sumar) cambios.notas = (m.notas ? m.notas + '\n' : '') + `• ${sumar}`;
 
