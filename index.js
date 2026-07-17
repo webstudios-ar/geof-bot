@@ -871,29 +871,185 @@ client.on('interactionCreate', async (interaction) => {
   // ==================== /normativas ====================
   if (cmd === 'normativas') {
     await interaction.deferReply({ ephemeral: true });
-    const embed = new EmbedBuilder()
+
+    const rol = (id, fallback) => (id && /^\d{17,20}$/.test(id)) ? `<@&${id}>` : `**${fallback}**`;
+
+    // ---- I. La unidad ----
+    const embedUnidad = new EmbedBuilder()
       .setAuthor({ name: 'G.E.O.F • Grupo Especial de Operaciones Federales' })
-      .setTitle('📕 NORMATIVA GENERAL G.E.O.F')
+      .setTitle('📕 NORMATIVA INTERNA')
       .setColor(COLOR.BASE)
       .setDescription(
-        `El **G.E.O.F** es una unidad táctica de élite encargada de operativos de alto riesgo. ` +
-        `Todos los integrantes deben mantener **respeto**, **disciplina** y **profesionalismo**.\n\n${DIV}`
+        `El **G.E.O.F** es la unidad de élite de la Policía Federal Argentina, destinada a la resolución de incidentes que exceden la capacidad de respuesta ordinaria: tomas de rehenes, secuestros, atrincheramientos y organizaciones criminales establecidas.\n\n` +
+        `La unidad opera en **dos ramas complementarias**:\n\n` +
+        `⚔️ **Operaciones** — Interviene. Asalto, contención, rescate.\n` +
+        `🕵️ **Inteligencia** — Prepara y esclarece. Infiltración, análisis, interrogatorio.\n\n` +
+        `-# La intervención dura minutos. El trabajo que la hace posible, semanas.\n\n` +
+        `${DIV}\n` +
+        `## ◾ PRINCIPIOS\n\n` +
+        `**1 · Profesionalismo**\n` +
+        `${SEP} El G.E.O.F se distingue por su conducta, no por su armamento\n` +
+        `${SEP} El trato entre integrantes y hacia terceros es respetuoso, dentro y fuera de servicio\n\n` +
+        `**2 · Disciplina**\n` +
+        `${SEP} La cadena de mando se respeta sin excepción\n` +
+        `${SEP} Las órdenes se cumplen; las objeciones se elevan después, no durante\n\n` +
+        `**3 · Proporcionalidad**\n` +
+        `${SEP} La fuerza es el último recurso, nunca el primero\n` +
+        `${SEP} Un operativo resuelto sin disparos es un operativo bien resuelto\n\n` +
+        `**4 · Criterio**\n` +
+        `${SEP} El reglamento cubre lo previsible; el resto es responsabilidad del oficial\n` +
+        `${SEP} Ante la duda, se consulta. Nunca se improvisa por cuenta propia`
       )
-      .addFields(
-        { name: '✅ Requisitos', value: '> Rango mínimo **Teniente**, aprobar evaluación y mantener buena conducta.', inline: false },
-        { name: '⚔️ Cadena de mando', value: '> Se debe respetar siempre la jerarquía y obedecer las órdenes del alto mando.', inline: false },
-        { name: '🎌 Operativos', value: '> Cada integrante cumple un rol específico (negociador, franco o táctico). Nadie actúa sin autorización.', inline: false },
-        { name: '🗣️ Negociación', value: '> Es obligatoria en situaciones con rehenes y se prioriza resolver sin violencia.', inline: false },
-        { name: '🎯 Francotirador', value: '> Solo actúa con autorización y cumple función de cobertura e inteligencia.', inline: false },
-        { name: '🛡️ Unidad táctica', value: '> Trabaja en equipo realizando entradas y asegurando zonas.', inline: false },
-        { name: '⛔ Sanciones', value: '> Las faltas pueden llevar desde advertencias hasta la expulsión del G.E.O.F.', inline: false },
-        { name: '📈 Ascensos', value: '> Dependen de actividad, desempeño, disciplina y decisión del alto mando.', inline: false }
+      .setFooter({ text: 'G.E.O.F • I — La unidad' });
+
+    // ---- II. Ingreso y progresión ----
+    const embedIngreso = new EmbedBuilder()
+      .setTitle('📗 INGRESO Y PROGRESIÓN')
+      .setColor(COLOR.APROBADO)
+      .setDescription(
+        `## ◾ REQUISITOS DE POSTULACIÓN\n\n` +
+        `${SEP} Rango mínimo **Sargento** en la P.F.A.\n` +
+        `${SEP} Conducta intachable, sin sanciones vigentes\n` +
+        `${SEP} Micrófono funcional y disponibilidad para operativos\n` +
+        `${SEP} Conocimiento de los protocolos tácticos\n` +
+        `${SEP} Aprobar la evaluación de ingreso\n\n` +
+        `${DIV}\n` +
+        `## ◾ EVALUACIÓN\n\n` +
+        `${SEP} Consta de **cuatro instancias**: datos, táctica I, táctica II y escenario final\n` +
+        `${SEP} Plazo de **15 minutos** desde el inicio\n` +
+        `${SEP} Se evalúa **criterio**, no extensión de las respuestas\n` +
+        `${SEP} Copiar respuestas implica **rechazo automático**\n` +
+        `${SEP} Rechazada la postulación, corresponde espera de **24 horas**\n\n` +
+        `${DIV}\n` +
+        `## ◾ ASCENSOS\n\n` +
+        `Se resuelven por decisión del alto mando, ponderando:\n\n` +
+        `${SEP} **Actividad** — presencia sostenida en operativos\n` +
+        `${SEP} **Desempeño** — criterio demostrado bajo presión\n` +
+        `${SEP} **Disciplina** — conducta y respeto a la cadena de mando\n` +
+        `${SEP} **Conducción** — capacidad de coordinar, para rangos de jefatura\n\n` +
+        `-# El ascenso no se solicita ni se reclama. Se otorga.\n\n` +
+        `${DIV}\n` +
+        `## ◾ ACCESO A INTELIGENCIA\n\n` +
+        `${SEP} **No se postula.** La designación es facultad exclusiva de la cúpula\n` +
+        `${SEP} Las funciones de Intel son **compatibles** con la rama operativa\n` +
+        `${SEP} Un Táctico puede desempeñarse como Analista o Interrogador sin conflicto\n` +
+        `${SEP} La incorporación responde a confianza acreditada, no a antigüedad`
       )
-      .setFooter({ text: 'G.E.O.F • Normativa vigente' })
+      .setFooter({ text: 'G.E.O.F • II — Ingreso y progresión' });
+
+    // ---- III. Operaciones ----
+    const embedOperaciones = new EmbedBuilder()
+      .setTitle('📘 REGLAS DE OPERACIÓN')
+      .setColor(COLOR.OPERATIVO)
+      .setDescription(
+        `## ◾ CADENA DE MANDO\n\n` +
+        `${SEP} La autoridad en el terreno recae en el **Jefe** presente\n` +
+        `${SEP} En su ausencia, asume el **Sub Jefe**\n` +
+        `${SEP} Las órdenes se ejecutan sin dilación ni discusión en campo\n` +
+        `${SEP} Toda objeción se eleva **finalizado** el operativo\n\n` +
+        `${DIV}\n` +
+        `## ◾ ASIGNACIÓN DE FUNCIONES\n\n` +
+        `${SEP} El Jefe asigna las funciones según el escenario\n` +
+        `${SEP} Cada integrante cumple **la función asignada**, no la que prefiere\n` +
+        `${SEP} Ningún oficial actúa por fuera de su rol sin autorización\n\n` +
+        `${DIV}\n` +
+        `## ◾ USO DE LA FUERZA\n\n` +
+        `${SEP} La negociación es **obligatoria** ante rehenes\n` +
+        `${SEP} El ${rol(ROL_NEGOCIADOR, 'Negociador')} es el **único habilitado** para dialogar con el agresor\n` +
+        `${SEP} Nadie interfiere una negociación en curso\n\n` +
+        `⚠️ **El ${rol(ROL_FRANCOTIRADOR, 'Francotirador')} no efectúa disparo sin autorización expresa del Jefe. Sin excepción.**\n\n` +
+        `${DIV}\n` +
+        `## ◾ CONDUCTA EN OPERATIVO\n\n` +
+        `${SEP} Comunicación clara y acotada — el canal no se satura\n` +
+        `${SEP} No se abandona posición sin aviso\n` +
+        `${SEP} El ${rol(ROL_TACTICO, 'Táctico')} provee protección al Negociador de forma permanente\n` +
+        `${SEP} Finalizado el operativo, corresponde reporte al Jefe`
+      )
+      .setFooter({ text: 'G.E.O.F • III — Reglas de operación' });
+
+    // ---- IV. Inteligencia ----
+    const embedInteligencia = new EmbedBuilder()
+      .setTitle('📙 REGLAS DE INTELIGENCIA')
+      .setColor(COLOR.RETIRO)
+      .setDescription(
+        `## ◾ RESERVA\n\n` +
+        `${SEP} La información de la rama **no sale de la rama**\n` +
+        `${SEP} No se comenta la existencia de infiltraciones en curso\n` +
+        `${SEP} Los legajos se consultan por necesidad, no por curiosidad\n\n` +
+        `${DIV}\n` +
+        `## ◾ INFILTRACIÓN\n\n` +
+        `${SEP} El ${rol(ROL_INFILTRADO, 'Infiltrado')} opera bajo identidad encubierta\n` +
+        `${SEP} **Queda excluido de todo operativo contra la organización que infiltra**\n` +
+        `${SEP} Reporta exclusivamente por el canal restringido\n` +
+        `${SEP} No revela su condición a ningún integrante ajeno a la rama\n\n` +
+        `**Ante requerimiento comprometedor de la organización:**\n` +
+        `${SEP} **1.** Procura evadirlo por medios propios — simulación, demora, sabotaje\n` +
+        `${SEP} **2.** De no ser viable, eleva consulta antes de actuar\n` +
+        `${SEP} **3.** Existe una línea que no se cruza. Cruzarla implica baja de la rama\n\n` +
+        `⚠️ **Comprometida la identidad, corresponde extracción inmediata. Sin discusión.**\n\n` +
+        `${DIV}\n` +
+        `## ◾ LEGAJOS\n\n` +
+        `${SEP} El ${rol(ROL_ANALISTA, 'Analista')} es responsable de mantenerlos actualizados\n` +
+        `${SEP} Se registra lo verificado; lo presumido se consigna como tal\n` +
+        `${SEP} Un legajo desactualizado es peor que ninguno\n\n` +
+        `${DIV}\n` +
+        `## ◾ INTERROGATORIO\n\n` +
+        `${SEP} Procede **con posterioridad** a la detención\n` +
+        `${SEP} Se ajusta al **protocolo vigente** de la unidad\n` +
+        `${SEP} Función diferenciada del Negociador: uno previene el hecho, el otro lo esclarece\n` +
+        `${SEP} Lo obtenido se incorpora al legajo correspondiente`
+      )
+      .setFooter({ text: 'G.E.O.F • IV — Reglas de inteligencia' });
+
+    // ---- V. Régimen disciplinario ----
+    const embedSanciones = new EmbedBuilder()
+      .setTitle('📕 RÉGIMEN DISCIPLINARIO')
+      .setColor(COLOR.EXPULSION)
+      .setDescription(
+        `Toda falta se pondera según **gravedad**, **reincidencia** y **consecuencias**.\n\n` +
+        `${DIV}\n` +
+        `## ◾ ESCALA\n\n` +
+        `**⚠️ Advertencia**\n` +
+        `${SEP} Comunicación deficiente en operativo\n` +
+        `${SEP} Inasistencia sin aviso\n` +
+        `${SEP} Falta de respeto entre integrantes\n\n` +
+        `**📉 Descenso de rango**\n` +
+        `${SEP} Reincidencia tras advertencia\n` +
+        `${SEP} Incumplimiento de una orden en campo\n` +
+        `${SEP} Actuar por fuera de la función asignada\n\n` +
+        `**⛔ Suspensión**\n` +
+        `${SEP} Uso injustificado de la fuerza\n` +
+        `${SEP} Interferir una negociación en curso\n` +
+        `${SEP} Disparo sin autorización\n\n` +
+        `**🚫 Expulsión**\n` +
+        `${SEP} Filtración de información de la unidad\n` +
+        `${SEP} Comprometer deliberadamente a un infiltrado\n` +
+        `${SEP} Conducta incompatible con la función policial\n` +
+        `${SEP} Reincidencia grave o acumulación de sanciones\n\n` +
+        `${DIV}\n` +
+        `## ◾ BAJAS\n\n` +
+        `**Expulsión** — Baja por sanción. Remoción total de roles. Registro en Updates.\n` +
+        `**Retiro** — Baja voluntaria. Se agradece el servicio prestado. Reingreso posible por evaluación.\n\n` +
+        `-# La diferencia entre una y otra queda asentada. Cómo se sale importa.\n\n` +
+        `${DIV}\n` +
+        `## ◾ PROCEDIMIENTO\n\n` +
+        `${SEP} Las sanciones las aplica la **Jefatura** o superior\n` +
+        `${SEP} Toda sanción se comunica al afectado con su motivo\n` +
+        `${SEP} El descargo se presenta ante la Dirección, no en canales públicos\n` +
+        `${SEP} La decisión de la cúpula es definitiva`
+      )
+      .setFooter({ text: 'G.E.O.F • V — Régimen disciplinario' })
       .setTimestamp();
+
+    const embeds = [embedUnidad, embedIngreso, embedOperaciones, embedInteligencia, embedSanciones];
+    for (const e of embeds) {
+      const len = (e.data.description || '').length;
+      if (len > 4096) console.warn(`[NORMATIVAS] Embed "${e.data.title}" excede 4096 (${len}).`);
+    }
+
     try {
-      await interaction.channel.send({ embeds: [embed] });
-      await interaction.editReply({ embeds: [embedBase(COLOR.EXITO).setTitle('✅ Normativa publicada').setDescription('La normativa general fue publicada en este canal.')] });
+      await interaction.channel.send({ embeds, allowedMentions: { parse: [] } });
+      await interaction.editReply({ embeds: [embedBase(COLOR.EXITO).setTitle('✅ Normativa publicada').setDescription('La normativa interna fue publicada en este canal.')] });
     } catch (e) {
       console.error('/normativas:', e);
       try { await interaction.editReply({ embeds: [embedBase(COLOR.RECHAZADO).setTitle('❌ Error al publicar').setDescription(`\`${e.message || 'error desconocido'}\``)] }); } catch (e2) {}
@@ -975,8 +1131,8 @@ client.on('interactionCreate', async (interaction) => {
       '```\n' +
       '         DIRECTOR\n' +
       '            │\n' +
-      '       INTELIGENCIA\n' +
-      '            │\n' +
+      '            INTELIGENCIA\n' +
+      '                  │\n' +
       'INFILTRADO · ANALISTA · INTERROGADOR\n' +
       '```\n' +
       `-# La intervención dura minutos. La inteligencia que la hace posible, semanas.\n\n` +
