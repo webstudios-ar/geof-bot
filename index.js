@@ -6,6 +6,13 @@ process.on('uncaughtException', (err) => console.error('[GLOBAL] Uncaught except
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent, GatewayIntentBits.GuildMembers] });
 
+// ==================== SUPABASE ====================
+const { createClient } = require('@supabase/supabase-js');
+const db = (process.env.SUPABASE_URL && process.env.SUPABASE_KEY)
+  ? createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY, { auth: { persistSession: false } })
+  : null;
+if (!db) console.warn('[SUPABASE] SUPABASE_URL o SUPABASE_KEY no definidas — los comandos de legajos no van a funcionar.');
+
 // ==================== CONFIGURACIÓN ====================
 const GITHUB_REPO       = 'webstudios-ar/geof-bot';
 
@@ -13,6 +20,10 @@ const CANAL_PANEL       = '1523832372062326944';
 const CANAL_APROBACION  = '1526648981848064214'; // canal de resultados: recibe el examen completo con botones aprobar/rechazar
 const CANAL_UPDATES     = '1493838384416952392';
 const CANAL_OPERATIVOS  = '1460758338387050550';
+
+// Foros de Inteligencia (tipo GuildForum — el bot crea posts, no mensajes)
+const FORO_MAFIAS       = '1384747758497304747';
+const FORO_PERSONAS     = '1526692575992348692';
 
 // ==================== JERARQUÍA G.E.O.F ====================
 // --- Alto Mando ---
@@ -43,8 +54,15 @@ const ALTO_MANDO = [ROL_DUENO_GEOF, ROL_DIRECTOR_GEOF, ROL_COMANDANTE_GEOF];
 const JEFATURA = [...ALTO_MANDO, ROL_JEFE_GEOF, ROL_SUBJEFE_GEOF];
 
 // Operativos: Jefatura + especialidades (Negociador, Francotirador, Táctico)
-// → convocatorias: /geof operativo, /roles
+// → convocatorias: /geof operativo
 const MANDO_OPERATIVO = [...JEFATURA, ROL_NEGOCIADOR, ROL_FRANCOTIRADOR, ROL_TACTICO];
+
+// Rama de Inteligencia: Jefatura + Analista + Interrogador + Infiltrado
+// → legajos: /mafia, /legajo
+// Los roles de Intel aún sin crear ('PENDIENTE') se filtran: hasta que existan,
+// el grupo equivale a JEFATURA. Al completar los IDs, pasan a habilitarse solos.
+const RAMA_INTEL = [...JEFATURA, ROL_ANALISTA, ROL_INTERROGADOR, ROL_INFILTRADO]
+  .filter(r => /^\d{17,20}$/.test(r));
 
 // Alias legacy: quien evalúa postulaciones y recibe la mención del expediente
 const ROLES_AUTORIZADOS = JEFATURA;
@@ -257,6 +275,128 @@ function filaBotonesVotacion(msgId, cerrada) {
   );
 }
 
+// ==================== LEGAJOS — HELPERS ====================
+const EST_MAFIA = {
+  activa:        { label: 'ACTIVA',         emoji: '🟢', color: COLOR.OPERATIVO },
+  observacion:   { label: 'EN OBSERVACIÓN', emoji: '🟡', color: COLOR.ADVERTENCIA },
+  desarticulada: { label: 'DESARTICULADA',  emoji: '⚫', color: COLOR.BASE }
+};
+const EST_PERSONA = {
+  libre:    { label: 'LIBRE',    emoji: '🟢', color: COLOR.OPERATIVO },
+  detenido: { label: 'DETENIDO', emoji: '🔵', color: COLOR.INFO },
+  profugo:  { label: 'PRÓFUGO',  emoji: '🔴', color: COLOR.RECHAZADO },
+  muerto:   { label: 'MUERTO',   emoji: '⚫', color: COLOR.EXPULSION }
+};
+
+// Genera el próximo número de expediente vía la función SQL
+async function nuevoExpediente(prefijo) {
+  const { data, error } = await db.rpc('nuevo_expediente', { prefijo });
+  if (error) throw new Error(`No se pudo generar expediente: ${error.message}`);
+  return data;
+}
+
+function embedMafia(m, integrantes = []) {
+  const est = EST_MAFIA[m.estado] || EST_MAFIA.activa;
+  const embed = new EmbedBuilder()
+    .setAuthor({ name: 'G.E.O.F • Inteligencia' })
+    .setTitle(`🗂️ ${m.nombre.toUpperCase()}`)
+    .setColor(est.color)
+    .setDescription(
+      `**Expediente** \`${m.expediente}\`\n` +
+      `**Estado** ${est.emoji} **${est.label}**\n${DIV}`
+    );
+
+  const campos = [];
+  if (m.zona)      campos.push({ name: '📍 Zona', value: '```' + trunc(m.zona, 60) + '```', inline: true });
+  if (m.actividad) campos.push({ name: '🔫 Actividad', value: '```' + trunc(m.actividad, 60) + '```', inline: true });
+  if (campos.length === 1) campos.push({ name: '\u200B', value: '\u200B', inline: true });
+
+  const lista = integrantes.length
+    ? integrantes.map(p => {
+        const e = EST_PERSONA[p.estado] || EST_PERSONA.libre;
+        const alias = p.alias ? ` "${p.alias}"` : '';
+        const rango = p.rango ? ` · ${p.rango}` : '';
+        return `${SEP} ${e.emoji} \`${p.expediente}\` **${p.nombre}**${alias}${rango}`;
+      }).join('\n')
+    : '_Sin integrantes registrados._';
+  campos.push({ name: `${DIV}\n👥 Integrantes vinculados (${integrantes.length})`, value: trunc(lista, 1000), inline: false });
+
+  if (m.notas) campos.push({ name: '📝 Notas', value: `> ${trunc(m.notas, 900)}`, inline: false });
+
+  embed.addFields(...campos)
+    .setFooter({ text: `Actualizado por última vez` })
+    .setTimestamp(new Date(m.actualizado_en));
+  return embed;
+}
+
+function embedPersona(p, org = null) {
+  const est = EST_PERSONA[p.estado] || EST_PERSONA.libre;
+  const embed = new EmbedBuilder()
+    .setAuthor({ name: 'G.E.O.F • Inteligencia' })
+    .setTitle(`👤 ${p.nombre.toUpperCase()}${p.alias ? ` — "${p.alias}"` : ''}`)
+    .setColor(est.color)
+    .setDescription(
+      `**Expediente** \`${p.expediente}\`\n` +
+      `**Estado** ${est.emoji} **${est.label}**\n${DIV}`
+    );
+
+  const campos = [];
+  campos.push({ name: '🏴 Organización', value: org ? `\`${org.expediente}\`\n**${org.nombre}**` : '```Sin vínculo```', inline: true });
+  if (p.rango) campos.push({ name: '🎖️ Rango', value: '```' + trunc(p.rango, 60) + '```', inline: true });
+  if (campos.length === 1) campos.push({ name: '\u200B', value: '\u200B', inline: true });
+
+  if (p.notas) campos.push({ name: `${DIV}\n📝 Notas`, value: `> ${trunc(p.notas, 900)}`, inline: false });
+
+  embed.addFields(...campos)
+    .setFooter({ text: `Actualizado por última vez` })
+    .setTimestamp(new Date(p.actualizado_en));
+  return embed;
+}
+
+// Crea el post de foro si no existe; si existe, edita el mensaje inicial.
+// Devuelve el id del hilo. Si el post fue borrado a mano, lo recrea.
+async function sincronizarPost(foroId, registro, embed, tabla) {
+  const foro = await client.channels.fetch(foroId);
+
+  // ¿Ya tiene post?
+  if (registro.thread_id) {
+    try {
+      const hilo = await client.channels.fetch(registro.thread_id);
+      const inicial = await hilo.fetchStarterMessage();
+      await inicial.edit({ embeds: [embed] });
+      if (hilo.name !== registro.nombre) await hilo.setName(trunc(registro.nombre, 90)).catch(() => {});
+      return hilo.id;
+    } catch (e) {
+      console.warn(`[LEGAJOS] Post ${registro.thread_id} inaccesible (${e.message}). Se recrea.`);
+    }
+  }
+
+  const hilo = await foro.threads.create({
+    name: trunc(registro.nombre, 90),
+    message: { embeds: [embed] },
+    reason: `Legajo ${registro.expediente}`
+  });
+  await db.from(tabla).update({ thread_id: hilo.id }).eq('id', registro.id);
+  return hilo.id;
+}
+
+// Busca por expediente exacto o por nombre (parcial, case-insensitive)
+async function buscarRegistro(tabla, termino) {
+  const t = termino.trim();
+  const porExp = await db.from(tabla).select('*').eq('expediente', t.toUpperCase()).maybeSingle();
+  if (porExp.data) return porExp.data;
+  const porNombre = await db.from(tabla).select('*').ilike('nombre', `%${t}%`).limit(2);
+  if (porNombre.error) throw new Error(porNombre.error.message);
+  if (!porNombre.data?.length) return null;
+  if (porNombre.data.length > 1) {
+    const err = new Error('AMBIGUO');
+    err.opciones = porNombre.data;
+    throw err;
+  }
+  return porNombre.data[0];
+}
+
+
 // ==================== READY ====================
 client.once('ready', async () => {
   console.log('Bot conectado: ' + client.user.tag);
@@ -295,6 +435,50 @@ client.once('ready', async () => {
     .setName('jerarquia')
     .setDescription('[HEAD] Publica la jerarquía y áreas del G.E.O.F');
 
+  const mafiaCmd = new SlashCommandBuilder()
+    .setName('mafia')
+    .setDescription('Legajos de organizaciones criminales')
+    .addSubcommand(s => s.setName('crear').setDescription('[INTEL] Abre el legajo de una organización')
+      .addStringOption(o => o.setName('nombre').setDescription('Nombre de la organización').setRequired(true).setMaxLength(80))
+      .addStringOption(o => o.setName('zona').setDescription('Zona o territorio').setMaxLength(60))
+      .addStringOption(o => o.setName('actividad').setDescription('Actividad principal').setMaxLength(60))
+      .addStringOption(o => o.setName('estado').setDescription('Estado del caso')
+        .addChoices({ name: '🟢 Activa', value: 'activa' }, { name: '🟡 En observación', value: 'observacion' }, { name: '⚫ Desarticulada', value: 'desarticulada' }))
+      .addStringOption(o => o.setName('notas').setDescription('Observaciones iniciales').setMaxLength(900)))
+    .addSubcommand(s => s.setName('info').setDescription('[INTEL] Consulta un legajo')
+      .addStringOption(o => o.setName('buscar').setDescription('Nombre o expediente (MAF-0001-2026)').setRequired(true)))
+    .addSubcommand(s => s.setName('actualizar').setDescription('[INTEL] Actualiza un legajo existente')
+      .addStringOption(o => o.setName('buscar').setDescription('Nombre o expediente').setRequired(true))
+      .addStringOption(o => o.setName('zona').setDescription('Nueva zona').setMaxLength(60))
+      .addStringOption(o => o.setName('actividad').setDescription('Nueva actividad').setMaxLength(60))
+      .addStringOption(o => o.setName('estado').setDescription('Nuevo estado')
+        .addChoices({ name: '🟢 Activa', value: 'activa' }, { name: '🟡 En observación', value: 'observacion' }, { name: '⚫ Desarticulada', value: 'desarticulada' }))
+      .addStringOption(o => o.setName('notas').setDescription('Reemplaza las notas').setMaxLength(900))
+      .addStringOption(o => o.setName('sumar_nota').setDescription('Agrega una línea a las notas existentes').setMaxLength(400)));
+
+  const legajoCmd = new SlashCommandBuilder()
+    .setName('legajo')
+    .setDescription('Legajos de personas')
+    .addSubcommand(s => s.setName('crear').setDescription('[INTEL] Abre el legajo de una persona')
+      .addStringOption(o => o.setName('nombre').setDescription('Nombre IC').setRequired(true).setMaxLength(80))
+      .addStringOption(o => o.setName('alias').setDescription('Alias o apodo').setMaxLength(60))
+      .addStringOption(o => o.setName('organizacion').setDescription('Organización (nombre o expediente MAF-)').setMaxLength(80))
+      .addStringOption(o => o.setName('rango').setDescription('Rango dentro de la organización').setMaxLength(60))
+      .addStringOption(o => o.setName('estado').setDescription('Situación')
+        .addChoices({ name: '🟢 Libre', value: 'libre' }, { name: '🔵 Detenido', value: 'detenido' }, { name: '🔴 Prófugo', value: 'profugo' }, { name: '⚫ Muerto', value: 'muerto' }))
+      .addStringOption(o => o.setName('notas').setDescription('Observaciones iniciales').setMaxLength(900)))
+    .addSubcommand(s => s.setName('info').setDescription('[INTEL] Consulta un legajo')
+      .addStringOption(o => o.setName('buscar').setDescription('Nombre, alias o expediente (LEG-0001-2026)').setRequired(true)))
+    .addSubcommand(s => s.setName('actualizar').setDescription('[INTEL] Actualiza un legajo existente')
+      .addStringOption(o => o.setName('buscar').setDescription('Nombre o expediente').setRequired(true))
+      .addStringOption(o => o.setName('alias').setDescription('Nuevo alias').setMaxLength(60))
+      .addStringOption(o => o.setName('organizacion').setDescription('Vincular a organización (nombre o MAF-)').setMaxLength(80))
+      .addStringOption(o => o.setName('rango').setDescription('Nuevo rango').setMaxLength(60))
+      .addStringOption(o => o.setName('estado').setDescription('Nueva situación')
+        .addChoices({ name: '🟢 Libre', value: 'libre' }, { name: '🔵 Detenido', value: 'detenido' }, { name: '🔴 Prófugo', value: 'profugo' }, { name: '⚫ Muerto', value: 'muerto' }))
+      .addStringOption(o => o.setName('notas').setDescription('Reemplaza las notas').setMaxLength(900))
+      .addStringOption(o => o.setName('sumar_nota').setDescription('Agrega una línea a las notas existentes').setMaxLength(400)));
+
   const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
 
   // Borra comandos fantasma registrados por GUILD (/expulsar, /expulsar-geof, /operacion, /setup-geof).
@@ -315,9 +499,9 @@ client.once('ready', async () => {
 
   try {
     await rest.put(Routes.applicationCommands(client.user.id), {
-      body: [geofCmd.toJSON(), normativasCmd.toJSON(), jerarquiaCmd.toJSON()]
+      body: [geofCmd.toJSON(), normativasCmd.toJSON(), jerarquiaCmd.toJSON(), mafiaCmd.toJSON(), legajoCmd.toJSON()]
     });
-    console.log('Comandos globales registrados: /geof (nuevo, operativo, expulsar, retiro, panel-postulaciones), /normativas, /jerarquia');
+    console.log('Comandos globales registrados: /geof, /normativas, /jerarquia, /mafia, /legajo');
   } catch (err) { console.error('Error registrando comandos:', err); }
 });
 
@@ -844,20 +1028,227 @@ client.on('interactionCreate', async (interaction) => {
   // ==================== SLASH COMMANDS ====================
   if (!interaction.isChatInputCommand()) return;
   const cmd = interaction.commandName;
-  if (cmd !== 'geof' && cmd !== 'normativas' && cmd !== 'jerarquia') return;
+  if (!['geof','normativas','jerarquia','mafia','legajo'].includes(cmd)) return;
 
   const revisor = interaction.member?.displayName || interaction.user.username;
 
   // Gate de permisos por comando según jerarquía
-  const sub = interaction.commandName === 'geof' ? interaction.options.getSubcommand() : null;
-  const esOperativo = (sub === 'operativo');
-  const grupoRequerido = esOperativo ? MANDO_OPERATIVO : JEFATURA;
+  const sub = ['geof', 'mafia', 'legajo'].includes(cmd) ? interaction.options.getSubcommand() : null;
+  const esOperativo = (cmd === 'geof' && sub === 'operativo');
+  const esIntel = (cmd === 'mafia' || cmd === 'legajo');
+  const grupoRequerido = esIntel ? RAMA_INTEL : esOperativo ? MANDO_OPERATIVO : JEFATURA;
 
   if (!tienePermiso(interaction.member, grupoRequerido)) {
-    const desc = esOperativo
+    const desc = esIntel
+      ? 'Este comando está reservado a la **rama de Inteligencia** del G.E.O.F.'
+      : esOperativo
       ? 'Este comando requiere ser parte de la **Jefatura** o tener una **especialidad** (Negociador, Francotirador o Táctico).'
       : 'Este comando está reservado a la **Jefatura del G.E.O.F** (Sub Jefe o superior).';
     await interaction.reply({ embeds: [embedBase(COLOR.RECHAZADO).setTitle('❌ Sin permisos').setDescription(desc)], ephemeral: true });
+    return;
+  }
+
+  // Los comandos de legajos requieren Supabase configurado
+  if (esIntel && !db) {
+    await interaction.reply({ embeds: [embedBase(COLOR.RECHAZADO).setTitle('❌ Base de datos no configurada').setDescription('Faltan las variables `SUPABASE_URL` y `SUPABASE_KEY` en el entorno.')], ephemeral: true });
+    return;
+  }
+
+  // ==================== /mafia ====================
+  if (cmd === 'mafia') {
+    await interaction.deferReply({ ephemeral: true });
+    try {
+      // ---- crear ----
+      if (sub === 'crear') {
+        const nombre = interaction.options.getString('nombre').trim();
+        const dup = await db.from('organizaciones').select('expediente,nombre').ilike('nombre', nombre).maybeSingle();
+        if (dup.data) {
+          await interaction.editReply({ embeds: [embedBase(COLOR.ADVERTENCIA).setTitle('⚠️ Ya existe').setDescription(`**${dup.data.nombre}** ya tiene legajo abierto: \`${dup.data.expediente}\``)] });
+          return;
+        }
+        const expediente = await nuevoExpediente('MAF');
+        const { data, error } = await db.from('organizaciones').insert({
+          expediente, nombre,
+          zona:      interaction.options.getString('zona'),
+          actividad: interaction.options.getString('actividad'),
+          estado:    interaction.options.getString('estado') || 'activa',
+          notas:     interaction.options.getString('notas'),
+          creado_por: interaction.user.id
+        }).select().single();
+        if (error) throw new Error(error.message);
+
+        const hiloId = await sincronizarPost(FORO_MAFIAS, data, embedMafia(data, []), 'organizaciones');
+        await interaction.editReply({ embeds: [embedBase(COLOR.EXITO).setTitle('✅ Legajo abierto').setDescription(`**${nombre}** — expediente \`${expediente}\`\n\n<#${hiloId}>`)] });
+        return;
+      }
+
+      // ---- info ----
+      if (sub === 'info') {
+        const m = await buscarRegistro('organizaciones', interaction.options.getString('buscar'));
+        if (!m) {
+          await interaction.editReply({ embeds: [embedBase(COLOR.RECHAZADO).setTitle('❌ Sin resultados').setDescription('No hay legajo que coincida con esa búsqueda.')] });
+          return;
+        }
+        const { data: integrantes } = await db.from('personas').select('*').eq('organizacion_id', m.id).order('nombre');
+        await interaction.editReply({ embeds: [embedMafia(m, integrantes || [])] });
+        return;
+      }
+
+      // ---- actualizar ----
+      if (sub === 'actualizar') {
+        const m = await buscarRegistro('organizaciones', interaction.options.getString('buscar'));
+        if (!m) {
+          await interaction.editReply({ embeds: [embedBase(COLOR.RECHAZADO).setTitle('❌ Sin resultados').setDescription('No hay legajo que coincida con esa búsqueda.')] });
+          return;
+        }
+        const cambios = { actualizado_en: new Date().toISOString() };
+        for (const f of ['zona', 'actividad', 'estado', 'notas']) {
+          const v = interaction.options.getString(f);
+          if (v !== null) cambios[f] = v;
+        }
+        const sumar = interaction.options.getString('sumar_nota');
+        if (sumar) cambios.notas = (m.notas ? m.notas + '\n' : '') + `• ${sumar}`;
+
+        if (Object.keys(cambios).length === 1) {
+          await interaction.editReply({ embeds: [embedBase(COLOR.ADVERTENCIA).setTitle('⚠️ Nada que actualizar').setDescription('No indicaste ningún campo a modificar.')] });
+          return;
+        }
+        const { data, error } = await db.from('organizaciones').update(cambios).eq('id', m.id).select().single();
+        if (error) throw new Error(error.message);
+
+        const { data: integrantes } = await db.from('personas').select('*').eq('organizacion_id', data.id).order('nombre');
+        const hiloId = await sincronizarPost(FORO_MAFIAS, data, embedMafia(data, integrantes || []), 'organizaciones');
+        await interaction.editReply({ embeds: [embedBase(COLOR.EXITO).setTitle('✅ Legajo actualizado').setDescription(`\`${data.expediente}\` — **${data.nombre}**\n\n<#${hiloId}>`)] });
+        return;
+      }
+    } catch (e) {
+      if (e.message === 'AMBIGUO') {
+        const l = e.opciones.map(o => `${SEP} \`${o.expediente}\` **${o.nombre}**`).join('\n');
+        await interaction.editReply({ embeds: [embedBase(COLOR.ADVERTENCIA).setTitle('⚠️ Búsqueda ambigua').setDescription(`Coincide con más de un legajo. Usá el expediente:\n\n${l}`)] });
+        return;
+      }
+      console.error('/mafia:', e);
+      try { await interaction.editReply({ embeds: [embedBase(COLOR.RECHAZADO).setTitle('❌ Error').setDescription(`\`${e.message || 'error desconocido'}\``)] }); } catch (e2) {}
+    }
+    return;
+  }
+
+  // ==================== /legajo ====================
+  if (cmd === 'legajo') {
+    await interaction.deferReply({ ephemeral: true });
+    try {
+      // Resuelve el vínculo con una organización
+      const resolverOrg = async (termino) => {
+        if (!termino) return null;
+        const o = await buscarRegistro('organizaciones', termino);
+        if (!o) throw new Error(`No existe organización que coincida con "${termino}". Creala primero con \`/mafia crear\`.`);
+        return o;
+      };
+
+      // ---- crear ----
+      if (sub === 'crear') {
+        const nombre = interaction.options.getString('nombre').trim();
+        const dup = await db.from('personas').select('expediente,nombre').ilike('nombre', nombre).maybeSingle();
+        if (dup.data) {
+          await interaction.editReply({ embeds: [embedBase(COLOR.ADVERTENCIA).setTitle('⚠️ Ya existe').setDescription(`**${dup.data.nombre}** ya tiene legajo abierto: \`${dup.data.expediente}\``)] });
+          return;
+        }
+        const org = await resolverOrg(interaction.options.getString('organizacion'));
+        const expediente = await nuevoExpediente('LEG');
+        const { data, error } = await db.from('personas').insert({
+          expediente, nombre,
+          alias:  interaction.options.getString('alias'),
+          organizacion_id: org?.id || null,
+          rango:  interaction.options.getString('rango'),
+          estado: interaction.options.getString('estado') || 'libre',
+          notas:  interaction.options.getString('notas'),
+          creado_por: interaction.user.id
+        }).select().single();
+        if (error) throw new Error(error.message);
+
+        const hiloId = await sincronizarPost(FORO_PERSONAS, data, embedPersona(data, org), 'personas');
+        // Refrescar el post de la organización para que muestre al nuevo integrante
+        if (org) {
+          const { data: ints } = await db.from('personas').select('*').eq('organizacion_id', org.id).order('nombre');
+          await sincronizarPost(FORO_MAFIAS, org, embedMafia(org, ints || []), 'organizaciones').catch(e => console.warn('[LEGAJOS] No se refrescó la org:', e.message));
+        }
+        await interaction.editReply({ embeds: [embedBase(COLOR.EXITO).setTitle('✅ Legajo abierto').setDescription(`**${nombre}** — expediente \`${expediente}\`\n\n<#${hiloId}>`)] });
+        return;
+      }
+
+      // ---- info ----
+      if (sub === 'info') {
+        const p = await buscarRegistro('personas', interaction.options.getString('buscar'));
+        if (!p) {
+          await interaction.editReply({ embeds: [embedBase(COLOR.RECHAZADO).setTitle('❌ Sin resultados').setDescription('No hay legajo que coincida con esa búsqueda.')] });
+          return;
+        }
+        let org = null;
+        if (p.organizacion_id) {
+          const r = await db.from('organizaciones').select('*').eq('id', p.organizacion_id).maybeSingle();
+          org = r.data;
+        }
+        await interaction.editReply({ embeds: [embedPersona(p, org)] });
+        return;
+      }
+
+      // ---- actualizar ----
+      if (sub === 'actualizar') {
+        const p = await buscarRegistro('personas', interaction.options.getString('buscar'));
+        if (!p) {
+          await interaction.editReply({ embeds: [embedBase(COLOR.RECHAZADO).setTitle('❌ Sin resultados').setDescription('No hay legajo que coincida con esa búsqueda.')] });
+          return;
+        }
+        const cambios = { actualizado_en: new Date().toISOString() };
+        for (const f of ['alias', 'rango', 'estado', 'notas']) {
+          const v = interaction.options.getString(f);
+          if (v !== null) cambios[f] = v;
+        }
+        const sumar = interaction.options.getString('sumar_nota');
+        if (sumar) cambios.notas = (p.notas ? p.notas + '\n' : '') + `• ${sumar}`;
+
+        const orgTermino = interaction.options.getString('organizacion');
+        let orgNueva = null;
+        if (orgTermino) {
+          orgNueva = await resolverOrg(orgTermino);
+          cambios.organizacion_id = orgNueva.id;
+        }
+
+        if (Object.keys(cambios).length === 1) {
+          await interaction.editReply({ embeds: [embedBase(COLOR.ADVERTENCIA).setTitle('⚠️ Nada que actualizar').setDescription('No indicaste ningún campo a modificar.')] });
+          return;
+        }
+        const orgAnteriorId = p.organizacion_id;
+        const { data, error } = await db.from('personas').update(cambios).eq('id', p.id).select().single();
+        if (error) throw new Error(error.message);
+
+        let org = orgNueva;
+        if (!org && data.organizacion_id) {
+          const r = await db.from('organizaciones').select('*').eq('id', data.organizacion_id).maybeSingle();
+          org = r.data;
+        }
+        const hiloId = await sincronizarPost(FORO_PERSONAS, data, embedPersona(data, org), 'personas');
+
+        // Refrescar los posts de las organizaciones afectadas (la nueva y la anterior)
+        const afectadas = [...new Set([data.organizacion_id, orgAnteriorId].filter(Boolean))];
+        for (const oid of afectadas) {
+          const r = await db.from('organizaciones').select('*').eq('id', oid).maybeSingle();
+          if (!r.data) continue;
+          const { data: ints } = await db.from('personas').select('*').eq('organizacion_id', oid).order('nombre');
+          await sincronizarPost(FORO_MAFIAS, r.data, embedMafia(r.data, ints || []), 'organizaciones').catch(e => console.warn('[LEGAJOS] No se refrescó la org:', e.message));
+        }
+        await interaction.editReply({ embeds: [embedBase(COLOR.EXITO).setTitle('✅ Legajo actualizado').setDescription(`\`${data.expediente}\` — **${data.nombre}**\n\n<#${hiloId}>`)] });
+        return;
+      }
+    } catch (e) {
+      if (e.message === 'AMBIGUO') {
+        const l = e.opciones.map(o => `${SEP} \`${o.expediente}\` **${o.nombre}**`).join('\n');
+        await interaction.editReply({ embeds: [embedBase(COLOR.ADVERTENCIA).setTitle('⚠️ Búsqueda ambigua').setDescription(`Coincide con más de un legajo. Usá el expediente:\n\n${l}`)] });
+        return;
+      }
+      console.error('/legajo:', e);
+      try { await interaction.editReply({ embeds: [embedBase(COLOR.RECHAZADO).setTitle('❌ Error').setDescription(`\`${e.message || 'error desconocido'}\``)] }); } catch (e2) {}
+    }
     return;
   }
 
