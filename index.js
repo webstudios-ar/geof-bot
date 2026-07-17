@@ -216,25 +216,36 @@ function construirEmbedVotacion(v) {
   const total = siList.length + noList.length;
 
   const embed = new EmbedBuilder()
-    .setAuthor({ name: 'G.E.O.F • Convocatoria de Rol' })
-    .setTitle(`📢 ${v.titulo}`)
+    .setAuthor({ name: 'G.E.O.F • Operaciones Tácticas' })
+    .setTitle(`🚨 OPERATIVO — ${(v.titulo || '').toUpperCase()}`)
     .setColor(v.cerrada ? COLOR.BASE : COLOR.OPERATIVO)
     .setTimestamp()
-    .setFooter({ text: v.cerrada ? 'G.E.O.F • Votación cerrada' : 'G.E.O.F • Votá tu asistencia — el voto es definitivo' });
+    .setFooter({ text: v.cerrada ? 'G.E.O.F • Convocatoria cerrada' : 'G.E.O.F • El voto es definitivo' });
 
-  let desc = '';
-  if (v.detalle && v.detalle.trim()) desc += `${trunc(v.detalle, 1200)}\n\n`;
-  desc += `${DIV}\n`;
-  desc += v.cerrada
-    ? '🔒 **Esta convocatoria fue cerrada.**'
-    : '> Convocado por <@' + v.autor + '>\n> Una vez que votás, **no podés cambiar ni retirar** tu voto.';
+  let desc = `Convocado por <@${v.autor}>\n${DIV}\n`;
+  if (v.cerrada) {
+    desc += '🔒 **Esta convocatoria fue cerrada.**';
+  } else {
+    desc += `⚠️ **El voto es definitivo.** Una vez emitido no se puede cambiar ni retirar.\n` +
+            `⚠️ **Votar ASISTO y no presentarse se computa como falta al G.E.O.F.**`;
+  }
   embed.setDescription(desc);
 
-  embed.addFields(
-    { name: `✅ ASISTEN (${siList.length})`, value: siList.length ? siList.join('\n') : '_Nadie todavía_', inline: true },
+  const campos = [];
+  if (v.hora)  campos.push({ name: '🕐 Hora', value: '```' + v.hora + '```', inline: true });
+  if (v.lugar) campos.push({ name: '📍 Zona', value: '```' + v.lugar + '```', inline: true });
+  if (v.requisitos) campos.push({ name: '👥 Participantes', value: '```' + v.requisitos + '```', inline: true });
+  if (v.descripcion) campos.push({ name: '📝 Objetivo', value: `> ${trunc(v.descripcion, 800)}`, inline: false });
+  if (v.detalle && v.detalle.trim()) campos.push({ name: '📋 Detalle', value: `> ${trunc(v.detalle, 800)}`, inline: false });
+
+  campos.push(
+    { name: `${DIV}\n✅ ASISTEN (${siList.length})`, value: siList.length ? siList.join('\n') : '_Nadie todavía_', inline: true },
+    { name: '\u200B', value: '\u200B', inline: true },
     { name: `❌ NO ASISTEN (${noList.length})`, value: noList.length ? noList.join('\n') : '_Nadie todavía_', inline: true },
     { name: '\u200B', value: `${DIV}\n👥 **Total de votos:** ${total}`, inline: false }
   );
+
+  embed.addFields(...campos);
   return embed;
 }
 
@@ -284,12 +295,6 @@ client.once('ready', async () => {
     .setName('jerarquia')
     .setDescription('[HEAD] Publica la jerarquía y áreas del G.E.O.F');
 
-  const rolesCmd = new SlashCommandBuilder()
-    .setName('roles')
-    .setDescription('[HEAD] Convoca al G.E.O.F a votar asistencia a un rol/evento')
-    .addStringOption(o => o.setName('titulo').setDescription('Título del rol/evento (ej: ROL CONTRA REAL MADRID)').setRequired(true).setMaxLength(100))
-    .addStringOption(o => o.setName('detalle').setDescription('Detalle: horario, ubicación, reglas...').setRequired(false).setMaxLength(1500));
-
   const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
 
   // Borra comandos fantasma registrados por GUILD (/expulsar, /expulsar-geof, /operacion, /setup-geof).
@@ -310,9 +315,9 @@ client.once('ready', async () => {
 
   try {
     await rest.put(Routes.applicationCommands(client.user.id), {
-      body: [geofCmd.toJSON(), normativasCmd.toJSON(), jerarquiaCmd.toJSON(), rolesCmd.toJSON()]
+      body: [geofCmd.toJSON(), normativasCmd.toJSON(), jerarquiaCmd.toJSON()]
     });
-    console.log('Comandos globales registrados: /geof (nuevo, operativo, expulsar, retiro, panel-postulaciones), /normativas, /jerarquia, /roles');
+    console.log('Comandos globales registrados: /geof (nuevo, operativo, expulsar, retiro, panel-postulaciones), /normativas, /jerarquia');
   } catch (err) { console.error('Error registrando comandos:', err); }
 });
 
@@ -497,37 +502,45 @@ client.on('interactionCreate', async (interaction) => {
     const descripcion = interaction.fields.getTextInputValue('op_descripcion');
     const requisitos  = interaction.fields.getTextInputValue('op_requisitos') || 'Toda la unidad';
 
-    const embed = new EmbedBuilder()
-      .setAuthor({ name: 'G.E.O.F • Operaciones Tácticas' })
-      .setTitle(`🚨 OPERATIVO — ${tipo.toUpperCase()}`)
-      .setDescription(`**${lugar}** • Convocado por <@${interaction.user.id}>\n${DIV}`)
-      .setColor(COLOR.OPERATIVO)
-      .addFields(
-        { name: '🕐 Hora',          value: '```' + hora + '```', inline: true },
-        { name: '📍 Zona',          value: '```' + lugar + '```', inline: true },
-        { name: '👥 Participantes', value: '```' + requisitos + '```', inline: true },
-        { name: '📝 Objetivo', value: `> ${trunc(descripcion, 800)}`, inline: false },
-        { name: `${DIV}\n👥 Asistentes confirmados (0)`, value: '_Presioná el botón para anotarte._', inline: false }
-      )
-      .setTimestamp()
-      .setFooter({ text: 'G.E.O.F • Sistema de Operaciones' });
+    await interaction.deferReply({ ephemeral: true });
 
-    const canalOp = await client.channels.fetch(CANAL_OPERATIVOS);
-    const rowAnota = new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId('ANOTA_placeholder').setLabel('ME ANOTO').setStyle(ButtonStyle.Success).setEmoji('🎯')
-    );
-    const msgEnviado = await canalOp.send({ content: '<@&' + ROL_GEOF + '>', embeds: [embed], components: [rowAnota] });
-    const rowReal = new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId('ANOTA_' + msgEnviado.id).setLabel('ME ANOTO').setStyle(ButtonStyle.Success).setEmoji('🎯')
-    );
-    await msgEnviado.edit({ components: [rowReal] });
-    asistentes[msgEnviado.id] = [];
+    const v = {
+      titulo: tipo,
+      hora,
+      lugar,
+      descripcion,
+      requisitos,
+      autor: interaction.user.id,
+      cerrada: false,
+      votos: {}
+    };
 
-    await interaction.reply({ embeds: [embedBase(COLOR.EXITO).setTitle('✅ Operativo publicado').setDescription(`El operativo fue publicado en <#${CANAL_OPERATIVOS}>.`)], ephemeral: true });
+    try {
+      const canalOp = await client.channels.fetch(CANAL_OPERATIVOS);
+      const rowPlaceholder = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId('VOTO_placeholder').setLabel('ASISTO').setStyle(ButtonStyle.Success).setEmoji('✅').setDisabled(true)
+      );
+      const msgEnviado = await canalOp.send({
+        content: '<@&' + ROL_GEOF + '>',
+        embeds: [construirEmbedVotacion(v)],
+        components: [rowPlaceholder],
+        allowedMentions: { roles: [ROL_GEOF] }
+      });
+
+      votaciones[msgEnviado.id] = v;
+      guardarVotaciones().catch(e => console.error(e));
+
+      await msgEnviado.edit({ components: [filaBotonesVotacion(msgEnviado.id, false)] });
+      await interaction.editReply({ embeds: [embedBase(COLOR.EXITO).setTitle('✅ Operativo publicado').setDescription(`El operativo fue publicado en <#${CANAL_OPERATIVOS}>.\n\nSolo miembros del G.E.O.F pueden votar y **el voto es definitivo**.`)] });
+    } catch (e) {
+      console.error('[OPERATIVO] Error publicando:', e);
+      try { await interaction.editReply({ embeds: [embedBase(COLOR.RECHAZADO).setTitle('❌ Error al publicar').setDescription(`\`${e.message || 'error desconocido'}\``)] }); } catch (e2) {}
+    }
     return;
   }
 
-  // ==================== BOTONES ====================
+  
+// ==================== BOTONES ====================
   if (interaction.isButton()) {
     const id = interaction.customId;
 
@@ -690,26 +703,6 @@ client.on('interactionCreate', async (interaction) => {
       return;
     }
 
-    // ANOTA_ — anotarse a operativo
-    if (id.startsWith('ANOTA_')) {
-      const msgId = id.replace('ANOTA_', '');
-      if (!asistentes[msgId]) asistentes[msgId] = [];
-      if (asistentes[msgId].includes(interaction.user.id)) {
-        await interaction.reply({ embeds: [embedBase(COLOR.ADVERTENCIA).setTitle('⚠️ Ya estás anotado').setDescription('Ya confirmaste asistencia a este operativo.')], ephemeral: true });
-        return;
-      }
-      asistentes[msgId].push(interaction.user.id);
-      guardarAsistentes().catch(e => console.error(e));
-      const lista = asistentes[msgId].map(u => `${SEP} <@${u}>`).join('\n');
-      const msgOriginal = interaction.message;
-      const embedActualizado = EmbedBuilder.from(msgOriginal.embeds[0]).setFields(
-        ...msgOriginal.embeds[0].fields.filter(f => !f.name.includes('Asistentes confirmados')),
-        { name: `${DIV}\n👥 Asistentes confirmados (${asistentes[msgId].length})`, value: lista, inline: false }
-      );
-      await interaction.update({ embeds: [embedActualizado] });
-      return;
-    }
-
     // APROBAR / RECHAZAR
     if (id.startsWith('ap_') || id.startsWith('re_')) {
       const tieneRol = tienePermiso(interaction.member, JEFATURA);
@@ -851,13 +844,13 @@ client.on('interactionCreate', async (interaction) => {
   // ==================== SLASH COMMANDS ====================
   if (!interaction.isChatInputCommand()) return;
   const cmd = interaction.commandName;
-  if (cmd !== 'geof' && cmd !== 'normativas' && cmd !== 'jerarquia' && cmd !== 'roles') return;
+  if (cmd !== 'geof' && cmd !== 'normativas' && cmd !== 'jerarquia') return;
 
   const revisor = interaction.member?.displayName || interaction.user.username;
 
   // Gate de permisos por comando según jerarquía
   const sub = interaction.commandName === 'geof' ? interaction.options.getSubcommand() : null;
-  const esOperativo = (interaction.commandName === 'roles') || (sub === 'operativo');
+  const esOperativo = (sub === 'operativo');
   const grupoRequerido = esOperativo ? MANDO_OPERATIVO : JEFATURA;
 
   if (!tienePermiso(interaction.member, grupoRequerido)) {
@@ -1095,33 +1088,6 @@ client.on('interactionCreate', async (interaction) => {
       await interaction.editReply({ embeds: [embedBase(COLOR.EXITO).setTitle('✅ Jerarquía publicada').setDescription('La estructura de la unidad fue publicada en este canal.')] });
     } catch (e) {
       console.error('/jerarquia:', e);
-      try { await interaction.editReply({ embeds: [embedBase(COLOR.RECHAZADO).setTitle('❌ Error al publicar').setDescription(`\`${e.message || 'error desconocido'}\``)] }); } catch (e2) {}
-    }
-    return;
-  }
-
-  // ==================== /roles (convocatoria + votación) ====================
-  if (cmd === 'roles') {
-    await interaction.deferReply({ ephemeral: true });
-    const titulo  = interaction.options.getString('titulo');
-    const detalle = interaction.options.getString('detalle') || '';
-
-    const vTemp = { titulo, detalle, autor: interaction.user.id, cerrada: false, votos: {} };
-    try {
-      // Enviar con placeholder para obtener el ID del mensaje, luego cablear los customId reales
-      const embedInicial = construirEmbedVotacion(vTemp);
-      const rowPlaceholder = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId('VOTO_placeholder').setLabel('ASISTO').setStyle(ButtonStyle.Success).setEmoji('✅').setDisabled(true)
-      );
-      const msg = await interaction.channel.send({ content: `<@&${ROL_GEOF}>`, embeds: [embedInicial], components: [rowPlaceholder], allowedMentions: { roles: [ROL_GEOF] } });
-
-      votaciones[msg.id] = vTemp;
-      guardarVotaciones().catch(e => console.error(e));
-
-      await msg.edit({ components: [filaBotonesVotacion(msg.id, false)] });
-      await interaction.editReply({ embeds: [embedBase(COLOR.EXITO).setTitle('✅ Convocatoria publicada').setDescription('La votación fue publicada en este canal. Solo miembros del G.E.O.F pueden votar y **el voto es definitivo**.')] });
-    } catch (e) {
-      console.error('/roles:', e);
       try { await interaction.editReply({ embeds: [embedBase(COLOR.RECHAZADO).setTitle('❌ Error al publicar').setDescription(`\`${e.message || 'error desconocido'}\``)] }); } catch (e2) {}
     }
     return;
