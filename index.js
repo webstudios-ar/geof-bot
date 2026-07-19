@@ -468,7 +468,9 @@ client.once('ready', async () => {
       .addStringOption(o => o.setName('estado').setDescription('Nuevo estado')
         .addChoices({ name: '🟢 Activa', value: 'activa' }, { name: '🟡 En observación', value: 'observacion' }, { name: '⚫ Desarticulada', value: 'desarticulada' }))
       .addStringOption(o => o.setName('notas').setDescription('Reemplaza las notas').setMaxLength(900))
-      .addStringOption(o => o.setName('sumar_nota').setDescription('Agrega una línea a las notas existentes').setMaxLength(400)));
+      .addStringOption(o => o.setName('sumar_nota').setDescription('Agrega una línea a las notas existentes').setMaxLength(400)))
+    .addSubcommand(s => s.setName('eliminar').setDescription('[INTEL] Elimina el legajo de una organización')
+      .addStringOption(o => o.setName('buscar').setDescription('Elegí de la lista').setRequired(true).setAutocomplete(true)));
 
   const legajoCmd = new SlashCommandBuilder()
     .setName('legajo')
@@ -491,7 +493,9 @@ client.once('ready', async () => {
       .addStringOption(o => o.setName('estado').setDescription('Nueva situación')
         .addChoices({ name: '🟢 Libre', value: 'libre' }, { name: '🔵 Detenido', value: 'detenido' }, { name: '🔴 Prófugo', value: 'profugo' }, { name: '⚫ Muerto', value: 'muerto' }))
       .addStringOption(o => o.setName('notas').setDescription('Reemplaza las notas').setMaxLength(900))
-      .addStringOption(o => o.setName('sumar_nota').setDescription('Agrega una línea a las notas existentes').setMaxLength(400)));
+      .addStringOption(o => o.setName('sumar_nota').setDescription('Agrega una línea a las notas existentes').setMaxLength(400)))
+    .addSubcommand(s => s.setName('eliminar').setDescription('[INTEL] Elimina el legajo de una persona')
+      .addStringOption(o => o.setName('buscar').setDescription('Elegí de la lista').setRequired(true).setAutocomplete(true)));
 
   const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
 
@@ -528,14 +532,27 @@ client.on('interactionCreate', async (interaction) => {
     try {
       const foco = interaction.options.getFocused(true);
       const q = (foco.value || '').trim();
-      const tabla = (interaction.commandName === 'mafia' || foco.name === 'organizacion') ? 'organizaciones' : 'personas';
+      // El campo 'organizacion' (en /legajo) siempre busca organizaciones,
+      // aunque el comando sea 'legajo'.
+      const esOrg = (interaction.commandName === 'mafia') || (foco.name === 'organizacion');
+      const tabla = esOrg ? 'organizaciones' : 'personas';
 
-      let sel = db.from(tabla).select('expediente,nombre,alias,estado').order('nombre').limit(25);
-      if (q) sel = sel.or(`nombre.ilike.%${q}%,expediente.ilike.%${q}%,alias.ilike.%${q}%`);
+      // 'alias' SÓLO existe en personas — pedirlo en organizaciones rompe la query entera.
+      const cols = esOrg ? 'expediente,nombre,estado' : 'expediente,nombre,alias,estado';
+      let sel = db.from(tabla).select(cols).order('nombre').limit(25);
+      if (q) {
+        const filtros = [`nombre.ilike.%${q}%`, `expediente.ilike.%${q}%`];
+        if (!esOrg) filtros.push(`alias.ilike.%${q}%`);
+        sel = sel.or(filtros.join(','));
+      }
       const { data, error } = await sel;
-      if (error) { await interaction.respond([]).catch(() => {}); return; }
+      if (error) {
+        console.error(`[AUTOCOMPLETE] ${tabla}:`, error.message);
+        await interaction.respond([]).catch(() => {});
+        return;
+      }
 
-      const mapa = tabla === 'organizaciones' ? EST_MAFIA : EST_PERSONA;
+      const mapa = esOrg ? EST_MAFIA : EST_PERSONA;
       const opciones = (data || []).map(r => {
         const e = mapa[r.estado] || Object.values(mapa)[0];
         const alias = r.alias ? ` "${r.alias}"` : '';
@@ -544,9 +561,10 @@ client.on('interactionCreate', async (interaction) => {
           value: r.expediente
         };
       });
+      console.log(`[AUTOCOMPLETE] ${tabla} q="${q}" → ${opciones.length}`);
       await interaction.respond(opciones).catch(() => {});
     } catch (e) {
-      console.error('[AUTOCOMPLETE]', e.message);
+      console.error('[AUTOCOMPLETE] excepción:', e.message);
       await interaction.respond([]).catch(() => {});
     }
     return;
@@ -772,6 +790,58 @@ client.on('interactionCreate', async (interaction) => {
 // ==================== BOTONES ====================
   if (interaction.isButton()) {
     const id = interaction.customId;
+
+    // ---- CANCELAR ELIMINACIÓN ----
+    if (id === 'DEL_CANCELAR') {
+      await interaction.update({ embeds: [embedBase(COLOR.BASE).setTitle('✖️ Cancelado').setDescription('No se eliminó nada.')], components: [] });
+      return;
+    }
+
+    // ---- CONFIRMAR ELIMINACIÓN (mafia / legajo) ----
+    if (id.startsWith('DEL_MAF_') || id.startsWith('DEL_LEG_')) {
+      if (!db) { await interaction.update({ embeds: [embedBase(COLOR.RECHAZADO).setTitle('❌ Sin base de datos').setDescription('Supabase no está configurado.')], components: [] }); return; }
+      if (!tienePermiso(interaction.member, RAMA_INTEL)) {
+        await interaction.reply({ embeds: [embedBase(COLOR.RECHAZADO).setTitle('❌ Sin permisos').setDescription('Sólo la rama de Inteligencia puede eliminar legajos.')], ephemeral: true });
+        return;
+      }
+      const esMafia = id.startsWith('DEL_MAF_');
+      const regId = parseInt(id.replace(esMafia ? 'DEL_MAF_' : 'DEL_LEG_', ''), 10);
+      const tabla = esMafia ? 'organizaciones' : 'personas';
+      const foro = esMafia ? FORO_MAFIAS : FORO_PERSONAS;
+
+      try {
+        const { data: reg } = await db.from(tabla).select('*').eq('id', regId).maybeSingle();
+        if (!reg) {
+          await interaction.update({ embeds: [embedBase(COLOR.ADVERTENCIA).setTitle('⚠️ Ya no existe').setDescription('El legajo ya fue eliminado.')], components: [] });
+          return;
+        }
+
+        // Marcar el post del foro como ELIMINADO (queda archivado, no se borra)
+        if (reg.thread_id) {
+          try {
+            const hilo = await client.channels.fetch(reg.thread_id);
+            const inicial = await hilo.fetchStarterMessage();
+            const embMarcado = EmbedBuilder.from(inicial.embeds[0])
+              .setColor(COLOR.EXPULSION)
+              .setTitle(`🗑️ [ELIMINADO] ${inicial.embeds[0].title.replace(/^🗂️ |^👤 /, '')}`);
+            await inicial.edit({ embeds: [embMarcado] });
+            await hilo.setName(trunc(`🗑️ ${reg.nombre}`, 90)).catch(() => {});
+            await hilo.setArchived(true).catch(() => {});
+          } catch (e) { console.warn('[LEGAJOS] No se pudo marcar el post:', e.message); }
+        }
+
+        // Borrar de la base. Las personas vinculadas quedan sin organización
+        // automáticamente (on delete set null en el schema).
+        const { error } = await db.from(tabla).delete().eq('id', regId);
+        if (error) throw new Error(error.message);
+
+        await interaction.update({ embeds: [embedBase(COLOR.EXITO).setTitle('🗑️ Legajo eliminado').setDescription(`\`${reg.expediente}\` — **${reg.nombre}** fue eliminado.${reg.thread_id ? '\n\nEl post quedó archivado y marcado como eliminado.' : ''}`)], components: [] });
+      } catch (e) {
+        console.error('[DEL]', e.message);
+        await interaction.update({ embeds: [embedBase(COLOR.RECHAZADO).setTitle('❌ Error al eliminar').setDescription(`\`${e.message}\``)], components: [] });
+      }
+      return;
+    }
 
     // ---- VOTACIÓN DE ROL (VOTO_SI_ / VOTO_NO_) ----
     if (id.startsWith('VOTO_SI_') || id.startsWith('VOTO_NO_')) {
@@ -1168,6 +1238,22 @@ client.on('interactionCreate', async (interaction) => {
         await interaction.editReply({ embeds: [embedBase(COLOR.EXITO).setTitle('✅ Legajo actualizado').setDescription(`\`${data.expediente}\` — **${data.nombre}**\n\n<#${hiloId}>`)] });
         return;
       }
+      // ---- eliminar (pide confirmación) ----
+      if (sub === 'eliminar') {
+        const m = await buscarRegistro('organizaciones', interaction.options.getString('buscar'));
+        if (!m) {
+          await interaction.editReply({ embeds: [embedBase(COLOR.RECHAZADO).setTitle('❌ Sin resultados').setDescription('No hay legajo que coincida con esa búsqueda.')] });
+          return;
+        }
+        const { count } = await db.from('personas').select('*', { count: 'exact', head: true }).eq('organizacion_id', m.id);
+        const aviso = count ? `\n\n⚠️ Tiene **${count}** persona(s) vinculada(s). Quedarán sin organización.` : '';
+        const row = new ActionRowBuilder().addComponents(
+          new ButtonBuilder().setCustomId(`DEL_MAF_${m.id}`).setLabel('ELIMINAR').setStyle(ButtonStyle.Danger).setEmoji('🗑️'),
+          new ButtonBuilder().setCustomId('DEL_CANCELAR').setLabel('Cancelar').setStyle(ButtonStyle.Secondary)
+        );
+        await interaction.editReply({ embeds: [embedBase(COLOR.EXPULSION).setTitle('🗑️ Confirmar eliminación').setDescription(`Vas a eliminar el legajo de **${m.nombre}** (\`${m.expediente}\`).${aviso}\n\n¿Confirmás?`)], components: [row] });
+        return;
+      }
     } catch (e) {
       if (e.message === 'AMBIGUO') {
         const l = e.opciones.map(o => `${SEP} \`${o.expediente}\` **${o.nombre}**`).join('\n');
@@ -1285,6 +1371,21 @@ client.on('interactionCreate', async (interaction) => {
           await sincronizarPost(FORO_MAFIAS, r.data, embedMafia(r.data, ints || []), 'organizaciones').catch(e => console.warn('[LEGAJOS] No se refrescó la org:', e.message));
         }
         await interaction.editReply({ embeds: [embedBase(COLOR.EXITO).setTitle('✅ Legajo actualizado').setDescription(`\`${data.expediente}\` — **${data.nombre}**\n\n<#${hiloId}>`)] });
+        return;
+      }
+      // ---- eliminar (pide confirmación) ----
+      if (sub === 'eliminar') {
+        const p = await buscarRegistro('personas', interaction.options.getString('buscar'));
+        if (!p) {
+          await interaction.editReply({ embeds: [embedBase(COLOR.RECHAZADO).setTitle('❌ Sin resultados').setDescription('No hay legajo que coincida con esa búsqueda.')] });
+          return;
+        }
+        const row = new ActionRowBuilder().addComponents(
+          new ButtonBuilder().setCustomId(`DEL_LEG_${p.id}`).setLabel('ELIMINAR').setStyle(ButtonStyle.Danger).setEmoji('🗑️'),
+          new ButtonBuilder().setCustomId('DEL_CANCELAR').setLabel('Cancelar').setStyle(ButtonStyle.Secondary)
+        );
+        const alias = p.alias ? ` "${p.alias}"` : '';
+        await interaction.editReply({ embeds: [embedBase(COLOR.EXPULSION).setTitle('🗑️ Confirmar eliminación').setDescription(`Vas a eliminar el legajo de **${p.nombre}**${alias} (\`${p.expediente}\`).\n\n¿Confirmás?`)], components: [row] });
         return;
       }
     } catch (e) {
