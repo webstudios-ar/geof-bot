@@ -320,10 +320,19 @@ function embedMafia(m, integrantes = []) {
       `**Estado** ${est.emoji} **${est.label}**\n${DIV}`
     );
 
+  // Sede: combina CP + nota descriptiva
+  let sede = '';
+  if (m.cp !== null && m.cp !== undefined) sede += `C.P. ${m.cp}`;
+  if (m.sede_nota) sede += (sede ? ' — ' : '') + m.sede_nota;
+
   const campos = [];
-  if (m.cp !== null && m.cp !== undefined) campos.push({ name: '📮 C.P. Sede', value: '```' + m.cp + '```', inline: true });
-  if (m.actividad) campos.push({ name: '🔫 Actividad', value: '```' + trunc(m.actividad, 60) + '```', inline: true });
-  if (campos.length === 1) campos.push({ name: '\u200B', value: '\u200B', inline: true });
+  if (sede)         campos.push({ name: '📍 Sede', value: '```' + trunc(sede, 100) + '```', inline: false });
+  if (m.lider)      campos.push({ name: '👑 Líder(es)', value: '```' + trunc(m.lider, 100) + '```', inline: true });
+  if (m.frecuencia) campos.push({ name: '📻 Frecuencia', value: '```' + trunc(m.frecuencia, 60) + '```', inline: true });
+  if ((m.lider ? 1 : 0) + (m.frecuencia ? 1 : 0) === 1) campos.push({ name: '\u200B', value: '\u200B', inline: true });
+  if (m.actividad)  campos.push({ name: '🎯 Actividad', value: '```' + trunc(m.actividad, 80) + '```', inline: true });
+  if (m.armamento)  campos.push({ name: '🔫 Armamento', value: '```' + trunc(m.armamento, 100) + '```', inline: true });
+  if ((m.actividad ? 1 : 0) + (m.armamento ? 1 : 0) === 1) campos.push({ name: '\u200B', value: '\u200B', inline: true });
 
   const lista = integrantes.length
     ? integrantes.map(p => {
@@ -337,9 +346,10 @@ function embedMafia(m, integrantes = []) {
 
   if (m.notas) campos.push({ name: '📝 Notas', value: `> ${trunc(m.notas, 900)}`, inline: false });
 
-  embed.addFields(...campos)
-    .setFooter({ text: `Actualizado por última vez` })
-    .setTimestamp(new Date(m.actualizado_en));
+  embed.addFields(...campos);
+  // Foto de vestimenta como imagen del embed
+  if (m.foto && /^https?:\/\//.test(m.foto)) embed.setImage(m.foto);
+  embed.setFooter({ text: 'Actualizado por última vez' }).setTimestamp(new Date(m.actualizado_en));
   return embed;
 }
 
@@ -455,7 +465,12 @@ client.once('ready', async () => {
     .addSubcommand(s => s.setName('crear').setDescription('[INTEL] Abre el legajo de una organización')
       .addStringOption(o => o.setName('nombre').setDescription('Nombre de la organización').setRequired(true).setMaxLength(80))
       .addIntegerOption(o => o.setName('cp').setDescription('Código postal de la sede (solo números)').setMinValue(0).setMaxValue(9999))
-      .addStringOption(o => o.setName('actividad').setDescription('Actividad principal').setMaxLength(60))
+      .addStringOption(o => o.setName('sede_nota').setDescription('Detalle de la sede (ej: escondite bajo el agua)').setMaxLength(200))
+      .addStringOption(o => o.setName('lider').setDescription('Líder o líderes de la organización').setMaxLength(200))
+      .addStringOption(o => o.setName('frecuencia').setDescription('Frecuencia de radio').setMaxLength(60))
+      .addStringOption(o => o.setName('actividad').setDescription('Actividad principal').setMaxLength(80))
+      .addStringOption(o => o.setName('armamento').setDescription('Armamento de uso frecuente').setMaxLength(200))
+      .addStringOption(o => o.setName('foto').setDescription('Link a foto de vestimenta (imgur, medal, etc)').setMaxLength(300))
       .addStringOption(o => o.setName('estado').setDescription('Estado del caso')
         .addChoices({ name: '🟢 Activa', value: 'activa' }, { name: '🟡 En observación', value: 'observacion' }, { name: '⚫ Desarticulada', value: 'desarticulada' }))
       .addStringOption(o => o.setName('notas').setDescription('Observaciones iniciales').setMaxLength(900)))
@@ -464,7 +479,12 @@ client.once('ready', async () => {
     .addSubcommand(s => s.setName('actualizar').setDescription('[INTEL] Actualiza un legajo existente')
       .addStringOption(o => o.setName('buscar').setDescription('Elegí de la lista o escribí para filtrar').setRequired(true).setAutocomplete(true))
       .addIntegerOption(o => o.setName('cp').setDescription('Nuevo código postal').setMinValue(0).setMaxValue(9999))
-      .addStringOption(o => o.setName('actividad').setDescription('Nueva actividad').setMaxLength(60))
+      .addStringOption(o => o.setName('sede_nota').setDescription('Nuevo detalle de la sede').setMaxLength(200))
+      .addStringOption(o => o.setName('lider').setDescription('Nuevo líder / líderes').setMaxLength(200))
+      .addStringOption(o => o.setName('frecuencia').setDescription('Nueva frecuencia de radio').setMaxLength(60))
+      .addStringOption(o => o.setName('actividad').setDescription('Nueva actividad').setMaxLength(80))
+      .addStringOption(o => o.setName('armamento').setDescription('Nuevo armamento frecuente').setMaxLength(200))
+      .addStringOption(o => o.setName('foto').setDescription('Nuevo link de foto').setMaxLength(300))
       .addStringOption(o => o.setName('estado').setDescription('Nuevo estado')
         .addChoices({ name: '🟢 Activa', value: 'activa' }, { name: '🟡 En observación', value: 'observacion' }, { name: '⚫ Desarticulada', value: 'desarticulada' }))
       .addStringOption(o => o.setName('notas').setDescription('Reemplaza las notas').setMaxLength(900))
@@ -1185,7 +1205,12 @@ client.on('interactionCreate', async (interaction) => {
         const { data, error } = await db.from('organizaciones').insert({
           expediente, nombre,
           cp:        interaction.options.getInteger('cp'),
+          sede_nota: interaction.options.getString('sede_nota'),
+          lider:     interaction.options.getString('lider'),
+          frecuencia: interaction.options.getString('frecuencia'),
           actividad: interaction.options.getString('actividad'),
+          armamento: interaction.options.getString('armamento'),
+          foto:      interaction.options.getString('foto'),
           estado:    interaction.options.getString('estado') || 'activa',
           notas:     interaction.options.getString('notas'),
           creado_por: interaction.user.id
@@ -1217,7 +1242,7 @@ client.on('interactionCreate', async (interaction) => {
           return;
         }
         const cambios = { actualizado_en: new Date().toISOString() };
-        for (const f of ['actividad', 'estado', 'notas']) {
+        for (const f of ['sede_nota', 'lider', 'frecuencia', 'actividad', 'armamento', 'foto', 'estado', 'notas']) {
           const v = interaction.options.getString(f);
           if (v !== null) cambios[f] = v;
         }
