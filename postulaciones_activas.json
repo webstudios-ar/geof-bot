@@ -3,6 +3,11 @@
     "inicio": 1786230761325,
     "expiraTs": 1786231661325,
     "expediente": "PST-0001-2026",
-    "datos": {}
+    "datos": {
+      "nombre": "Franco Tolaba",
+      "rango": "Cabo 1°",
+      "disp": "4",
+      "diferencia": "Tengo conocimiento en tácticas CQB de allanamiento, como de combate a largas distancias con francotirador y a corta distancia con fusiles y subfusiles"
+    }
   }
 }
