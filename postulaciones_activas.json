@@ -7,7 +7,12 @@
       "nombre": "Jacob Allan",
       "rango": "Teniente",
       "disp": "3-2",
-      "diferencia": "Deciplina y decision"
+      "diferencia": "Deciplina y decision",
+      "nvl": "No valorar vida, que te apunten 4 tipos y no hacer nada",
+      "no_amenazar": "Por que el tiene el tiene la vida de una persona en sus manos y puede matarlo y debes velar por la seguridad de ellos",
+      "rehenes": "Mantendría la calma, coordinaria toda la malla y iniciar una negocion con los sujetos para poder llegar a un acuerdo",
+      "secuestro": "Coordinaria lo maximo posible y entablaria una negocion con su sujeto colaborando en todo momento para no hacer ningun daño",
+      "ingreso": "Se coordina todo el equipo para una mayor efectividad, limpiando sitios y lograr un ingreso con exito"
     }
   }
 }
