@@ -3,6 +3,11 @@
     "inicio": 1786246752227,
     "expiraTs": 1786247652227,
     "expediente": "PST-0001-2026",
-    "datos": {}
+    "datos": {
+      "nombre": "Jacob Allan",
+      "rango": "Teniente",
+      "disp": "3-2",
+      "diferencia": "Deciplina y decision"
+    }
   }
 }
