@@ -3,6 +3,11 @@
     "inicio": 1786344340911,
     "expiraTs": 1786345240911,
     "expediente": "PST-0001-2026",
-    "datos": {}
+    "datos": {
+      "nombre": "AAAAAAAAAAAAA",
+      "rango": "AAAAAAAAAAAAAAAA",
+      "disp": "AAAAAAAAAAAAA",
+      "diferencia": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+    }
   }
 }
