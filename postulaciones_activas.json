@@ -1,22 +1,8 @@
 {
   "696160444083077121": {
-    "inicio": 1786341083731,
-    "expiraTs": 1786341983731,
+    "inicio": 1786344340911,
+    "expiraTs": 1786345240911,
     "expediente": "PST-0001-2026",
-    "datos": {
-      "nombre": "aaa",
-      "rango": "aaaa",
-      "disp": "aaaaa",
-      "diferencia": "aaaaaaaaaaaaaaaaaaaaa",
-      "nvl": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-      "no_amenazar": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-      "rehenes": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-      "secuestro": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-      "ingreso": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-      "perimetro": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-      "por_que": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-      "iniciativa": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-      "negociador": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
-    }
+    "datos": {}
   }
 }
