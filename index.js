@@ -4,32 +4,43 @@ const {
 } = require('discord.js');
 const http = require('http');
 
-// ─── KEEP-ALIVE SERVER (evita que Railway apague el bot) ──────────────────────
+// ─── KEEP-ALIVE (Railway no duerme el bot) ────────────────────────────────────
 http.createServer((req, res) => {
   res.writeHead(200);
   res.end('GEOF Bot online');
-}).listen(process.env.PORT || 3000);
-
-const client = new Client({
-  intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent, GatewayIntentBits.GuildMembers],
+}).listen(process.env.PORT || 3000, () => {
+  console.log('✅ Keep-alive server corriendo');
 });
 
-const POSTULACIONES_CHANNEL_ID = '1523833135656210462'; // CANAL CORRECTO
-const UPDATES_CHANNEL_ID = '1493838384416952392';
-const GUILD_ID = '1000882508373688331';
-const ROL_MIEMBRO_GEOF = '1474252638832033884';
+const client = new Client({
+  intents: [
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.MessageContent,
+    GatewayIntentBits.GuildMembers,
+  ],
+});
+
+const POSTULACIONES_CHANNEL_ID = '1523833135656210462';
+const UPDATES_CHANNEL_ID       = '1493838384416952392';
+const GUILD_ID                 = '1000882508373688331';
+const ROL_MIEMBRO_GEOF         = '1474252638832033884';
+const ROL_DUENIO_GEOF          = '1474513244084371697'; // Dueño GEOF — siempre puede postularse
 
 const ROLES_IDS = [
-  '1474513244084371697',
-  '1459343404155670710',
-  '1384748336447361085',
-  '1457168018269278402',
-  '1412987223086731336',
+  '1474513244084371697', // Dueño
+  '1459343404155670710', // Director
+  '1384748336447361085', // Comandante
+  '1457168018269278402', // Jefe
+  '1412987223086731336', // Sub Jefe
 ];
 
 const ROLES_MENCIONES = ROLES_IDS.map(id => `<@&${id}>`).join(' ');
+
+// Almacena respuestas parciales por usuario
 const userResponses = new Map();
 
+// ─── READY ────────────────────────────────────────────────────────────────────
 client.once(Events.ClientReady, async () => {
   console.log(`✅ Bot listo como ${client.user.tag}`);
   const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
@@ -38,13 +49,19 @@ client.once(Events.ClientReady, async () => {
       body: [{ name: 'setup-geof', description: 'Envia el panel de postulacion al G.E.O.F' }]
     });
     console.log('✅ Comandos registrados');
-  } catch (err) { console.error(err); }
+  } catch (err) {
+    console.error('Error registrando comandos:', err);
+  }
 });
 
-// Reconectar automáticamente si se desconecta
-client.on('error', err => console.error('Error del cliente:', err));
-client.on('warn', info => console.warn('Advertencia:', info));
-client.on(Events.ShardDisconnect, () => console.log('Bot desconectado, reconectando...'));
+// Manejo de errores de conexión sin crashear
+client.on('error', err => console.error('Client error:', err.message));
+client.on('warn',  msg => console.warn('Warn:', msg));
+
+// ─── HELPERS ──────────────────────────────────────────────────────────────────
+function getNombre(member) {
+  return member?.nickname || member?.user?.globalName || member?.user?.username || 'Desconocido';
+}
 
 function btnSig(id, label) {
   return new ActionRowBuilder().addComponents(
@@ -52,18 +69,33 @@ function btnSig(id, label) {
   );
 }
 
-function getNombre(member) {
-  return member?.nickname || member?.user?.globalName || member?.user?.username || 'Desconocido';
+function buildModal(customId, title, fields) {
+  const modal = new ModalBuilder().setCustomId(customId).setTitle(title);
+  for (const f of fields) {
+    const input = new TextInputBuilder()
+      .setCustomId(f.id)
+      .setLabel(f.label)
+      .setStyle(f.style === 'Short' ? TextInputStyle.Short : TextInputStyle.Paragraph)
+      .setRequired(true);
+    if (f.placeholder) input.setPlaceholder(f.placeholder);
+    modal.addComponents(new ActionRowBuilder().addComponents(input));
+  }
+  return modal;
 }
 
+// ─── INTERACCIONES ────────────────────────────────────────────────────────────
 client.on(Events.InteractionCreate, async (interaction) => {
   try {
 
-    // /setup-geof
+    // /setup-geof ─────────────────────────────────────────────────────────────
     if (interaction.isChatInputCommand() && interaction.commandName === 'setup-geof') {
       const embed = new EmbedBuilder()
         .setTitle('Postulacion al G.E.O.F - Unete a Nuestro Equipo!')
-        .setDescription('Queres formar parte del **Grupo Especial de Operaciones y Fuerzas**?\n\nCompleta el formulario y postulate.\nNuestros superiores evaluaran tu solicitud.')
+        .setDescription(
+          'Queres formar parte del **Grupo Especial de Operaciones y Fuerzas**?\n\n' +
+          'Completa el formulario y postulate.\n' +
+          'Nuestros superiores evaluaran tu solicitud.'
+        )
         .setColor(0xFFD700)
         .setFooter({ text: 'G.E.O.F | Kilombo RP 2022 - 2025' })
         .setTimestamp();
@@ -76,78 +108,98 @@ client.on(Events.InteractionCreate, async (interaction) => {
       return;
     }
 
+    // BOTÓN POSTULAR ───────────────────────────────────────────────────────────
     if (interaction.isButton() && interaction.customId === 'postular_geof') {
+      // Limpiar respuestas anteriores sin importar el rol
       userResponses.delete(interaction.user.id);
       await interaction.showModal(buildModal('geof_paso1', 'G.E.O.F - Paso 1 de 4', [
-        { id: 'nombre_ic', label: 'Nombre IC', style: 'Short' },
-        { id: 'rango_pfa', label: 'Rango actual en la PFA', style: 'Short' },
-        { id: 'dias_semana', label: 'Dias disponibles por semana', style: 'Short', placeholder: 'Ej: Lunes, Miercoles, Viernes' },
-        { id: 'diferencia', label: 'Que te diferencia de otros postulantes?', style: 'Paragraph' },
-        { id: 'nvl', label: 'Que es el NVL (no valorar vida)? + ejemplo', style: 'Paragraph' },
+        { id: 'nombre_ic',   label: 'Nombre IC',                              style: 'Short' },
+        { id: 'rango_pfa',   label: 'Rango actual en la PFA',                 style: 'Short' },
+        { id: 'dias_semana', label: 'Dias disponibles por semana',            style: 'Short', placeholder: 'Ej: Lunes, Miercoles, Viernes' },
+        { id: 'diferencia',  label: 'Que te diferencia de otros postulantes?', style: 'Paragraph' },
+        { id: 'nvl',         label: 'Que es el NVL (no valorar vida)? + ejemplo', style: 'Paragraph' },
       ]));
       return;
     }
 
+    // PASO 1 submit ────────────────────────────────────────────────────────────
     if (interaction.isModalSubmit() && interaction.customId === 'geof_paso1') {
       userResponses.set(interaction.user.id, {
         paso1: {
-          nombre_ic: interaction.fields.getTextInputValue('nombre_ic'),
-          rango_pfa: interaction.fields.getTextInputValue('rango_pfa'),
+          nombre_ic:   interaction.fields.getTextInputValue('nombre_ic'),
+          rango_pfa:   interaction.fields.getTextInputValue('rango_pfa'),
           dias_semana: interaction.fields.getTextInputValue('dias_semana'),
-          diferencia: interaction.fields.getTextInputValue('diferencia'),
-          nvl: interaction.fields.getTextInputValue('nvl'),
+          diferencia:  interaction.fields.getTextInputValue('diferencia'),
+          nvl:         interaction.fields.getTextInputValue('nvl'),
         }
       });
-      await interaction.reply({ content: '**Paso 1 completado!** Hace clic para continuar.', components: [btnSig('geof_abrir2', 'Continuar al Paso 2')], ephemeral: true });
+      await interaction.reply({
+        content: '**Paso 1 completado!** Hace clic para continuar.',
+        components: [btnSig('geof_abrir2', 'Continuar al Paso 2')],
+        ephemeral: true,
+      });
       return;
     }
 
+    // BOTÓN PASO 2 ─────────────────────────────────────────────────────────────
     if (interaction.isButton() && interaction.customId === 'geof_abrir2') {
       await interaction.showModal(buildModal('geof_paso2', 'G.E.O.F - Paso 2 de 4', [
-        { id: 'no_amenazar', label: 'Por que NO amenazar al sospechoso?', style: 'Paragraph' },
-        { id: 'toma_rehenes', label: 'Como actuarias en una toma de rehenes?', style: 'Paragraph' },
-        { id: 'secuestro', label: 'Como actuarias en un secuestro?', style: 'Paragraph' },
-        { id: 'ingreso_tactico', label: 'Como se hace un ingreso tactico?', style: 'Paragraph' },
-        { id: 'perimetro_arma', label: 'Que es un perimetro y como se arma?', style: 'Paragraph' },
+        { id: 'no_amenazar',    label: 'Por que NO amenazar al sospechoso?',    style: 'Paragraph' },
+        { id: 'toma_rehenes',   label: 'Como actuarias en una toma de rehenes?', style: 'Paragraph' },
+        { id: 'secuestro',      label: 'Como actuarias en un secuestro?',        style: 'Paragraph' },
+        { id: 'ingreso_tactico',label: 'Como se hace un ingreso tactico?',       style: 'Paragraph' },
+        { id: 'perimetro_arma', label: 'Que es un perimetro y como se arma?',   style: 'Paragraph' },
       ]));
       return;
     }
 
+    // PASO 2 submit ────────────────────────────────────────────────────────────
     if (interaction.isModalSubmit() && interaction.customId === 'geof_paso2') {
       const existing = userResponses.get(interaction.user.id) || {};
       existing.paso2 = {
-        no_amenazar: interaction.fields.getTextInputValue('no_amenazar'),
-        toma_rehenes: interaction.fields.getTextInputValue('toma_rehenes'),
-        secuestro: interaction.fields.getTextInputValue('secuestro'),
+        no_amenazar:     interaction.fields.getTextInputValue('no_amenazar'),
+        toma_rehenes:    interaction.fields.getTextInputValue('toma_rehenes'),
+        secuestro:       interaction.fields.getTextInputValue('secuestro'),
         ingreso_tactico: interaction.fields.getTextInputValue('ingreso_tactico'),
-        perimetro_arma: interaction.fields.getTextInputValue('perimetro_arma'),
+        perimetro_arma:  interaction.fields.getTextInputValue('perimetro_arma'),
       };
       userResponses.set(interaction.user.id, existing);
-      await interaction.reply({ content: '**Paso 2 completado!** Hace clic para continuar.', components: [btnSig('geof_abrir3', 'Continuar al Paso 3')], ephemeral: true });
+      await interaction.reply({
+        content: '**Paso 2 completado!** Hace clic para continuar.',
+        components: [btnSig('geof_abrir3', 'Continuar al Paso 3')],
+        ephemeral: true,
+      });
       return;
     }
 
+    // BOTÓN PASO 3 ─────────────────────────────────────────────────────────────
     if (interaction.isButton() && interaction.customId === 'geof_abrir3') {
       await interaction.showModal(buildModal('geof_paso3', 'G.E.O.F - Paso 3 de 4', [
-        { id: 'por_que_geof', label: 'Por que queres ser parte del G.E.O.F?', style: 'Paragraph' },
-        { id: 'ordenes_iniciativa', label: 'Seguir ordenes o tomar iniciativa?', style: 'Paragraph' },
-        { id: 'negociador', label: 'Quien negocia en una toma de rehenes?', style: 'Paragraph', placeholder: 'Quien es el encargado y como se procede?' },
+        { id: 'por_que_geof',      label: 'Por que queres ser parte del G.E.O.F?',    style: 'Paragraph' },
+        { id: 'ordenes_iniciativa', label: 'Seguir ordenes o tomar iniciativa?',      style: 'Paragraph' },
+        { id: 'negociador',         label: 'Quien negocia en una toma de rehenes?',   style: 'Paragraph', placeholder: 'Quien es el encargado y como se procede?' },
       ]));
       return;
     }
 
+    // PASO 3 submit ────────────────────────────────────────────────────────────
     if (interaction.isModalSubmit() && interaction.customId === 'geof_paso3') {
       const existing = userResponses.get(interaction.user.id) || {};
       existing.paso3 = {
-        por_que_geof: interaction.fields.getTextInputValue('por_que_geof'),
+        por_que_geof:       interaction.fields.getTextInputValue('por_que_geof'),
         ordenes_iniciativa: interaction.fields.getTextInputValue('ordenes_iniciativa'),
-        negociador: interaction.fields.getTextInputValue('negociador'),
+        negociador:         interaction.fields.getTextInputValue('negociador'),
       };
       userResponses.set(interaction.user.id, existing);
-      await interaction.reply({ content: '**Paso 3 completado!** Ultimo paso, hace clic para finalizar.', components: [btnSig('geof_abrir4', 'Paso Final 4')], ephemeral: true });
+      await interaction.reply({
+        content: '**Paso 3 completado!** Ultimo paso, hace clic para finalizar.',
+        components: [btnSig('geof_abrir4', 'Paso Final 4')],
+        ephemeral: true,
+      });
       return;
     }
 
+    // BOTÓN PASO 4 ─────────────────────────────────────────────────────────────
     if (interaction.isButton() && interaction.customId === 'geof_abrir4') {
       const modal = new ModalBuilder().setCustomId('geof_paso4').setTitle('G.E.O.F - Paso 4 de 4 (Final)');
       modal.addComponents(
@@ -164,15 +216,22 @@ client.on(Events.InteractionCreate, async (interaction) => {
       return;
     }
 
+    // PASO 4 submit → ENVIAR POSTULACION ──────────────────────────────────────
     if (interaction.isModalSubmit() && interaction.customId === 'geof_paso4') {
       const stored = userResponses.get(interaction.user.id);
       if (!stored?.paso1 || !stored?.paso2 || !stored?.paso3) {
-        await interaction.reply({ content: '❌ Error: respuestas perdidas. Empeza de nuevo con /setup-geof.', ephemeral: true });
+        // Si faltan datos por error, limpiar para que pueda reintentar YA
+        userResponses.delete(interaction.user.id);
+        await interaction.reply({
+          content: '❌ Ocurrio un error con tus respuestas. Ya podes intentarlo de nuevo con el boton de postulacion.',
+          ephemeral: true,
+        });
         return;
       }
+
       const { paso1, paso2, paso3 } = stored;
       const situacion = interaction.fields.getTextInputValue('situacion_rehenes');
-      userResponses.delete(interaction.user.id);
+      userResponses.delete(interaction.user.id); // Limpiar antes de enviar
 
       const member = await interaction.guild.members.fetch(interaction.user.id).catch(() => null);
       const nombrePostulante = getNombre(member);
@@ -183,19 +242,19 @@ client.on(Events.InteractionCreate, async (interaction) => {
         .setThumbnail(interaction.user.displayAvatarURL())
         .addFields(
           { name: '━━━━━━ DATOS GENERALES ━━━━━━', value: '\u200B' },
-          { name: '👤 Nombre IC', value: paso1.nombre_ic, inline: true },
-          { name: '🎖️ Rango actual PFA', value: paso1.rango_pfa, inline: true },
-          { name: '📅 Dias disponibles', value: paso1.dias_semana, inline: true },
-          { name: '⭐ ¿Que te diferencia de otros postulantes?', value: paso1.diferencia },
-          { name: '❓ ¿Que es el NVL (no valorar vida)? Da un ejemplo', value: paso1.nvl },
+          { name: '👤 Nombre IC',           value: paso1.nombre_ic,   inline: true },
+          { name: '🎖️ Rango actual PFA',    value: paso1.rango_pfa,   inline: true },
+          { name: '📅 Dias disponibles',    value: paso1.dias_semana, inline: true },
+          { name: '⭐ ¿Que te diferencia de otros postulantes?',         value: paso1.diferencia },
+          { name: '❓ ¿Que es el NVL (no valorar vida)? Da un ejemplo',  value: paso1.nvl },
           { name: '━━━━━━ CONOCIMIENTO TACTICO ━━━━━━', value: '\u200B' },
-          { name: '🚫 ¿Por que NO se debe amenazar al sospechoso?', value: paso2.no_amenazar },
-          { name: '🔒 ¿Como actuarias en una toma de rehenes?', value: paso2.toma_rehenes },
-          { name: '🚨 ¿Como actuarias en un secuestro?', value: paso2.secuestro },
-          { name: '🏠 ¿Como se hace un ingreso tactico a una casa?', value: paso2.ingreso_tactico },
-          { name: '🔶 ¿Que es un perimetro y como se arma?', value: paso2.perimetro_arma },
+          { name: '🚫 ¿Por que NO se debe amenazar al sospechoso?',      value: paso2.no_amenazar },
+          { name: '🔒 ¿Como actuarias en una toma de rehenes?',          value: paso2.toma_rehenes },
+          { name: '🚨 ¿Como actuarias en un secuestro?',                 value: paso2.secuestro },
+          { name: '🏠 ¿Como se hace un ingreso tactico a una casa?',     value: paso2.ingreso_tactico },
+          { name: '🔶 ¿Que es un perimetro y como se arma?',             value: paso2.perimetro_arma },
           { name: '━━━━━━ MOTIVACION ━━━━━━', value: '\u200B' },
-          { name: '🦅 ¿Por que queres ser parte del G.E.O.F?', value: paso3.por_que_geof },
+          { name: '🦅 ¿Por que queres ser parte del G.E.O.F?',           value: paso3.por_que_geof },
           { name: '⚖️ ¿Es mas importante seguir ordenes o tomar iniciativa?', value: paso3.ordenes_iniciativa },
           { name: '🗣️ ¿Quien es el encargado de negociar y como se procede?', value: paso3.negociador },
           { name: '━━━━━━ SITUACION TACTICA ━━━━━━', value: '\u200B' },
@@ -214,11 +273,14 @@ client.on(Events.InteractionCreate, async (interaction) => {
         )]
       });
 
-      await interaction.reply({ content: '✅ **Postulacion enviada con exito!** El G.E.O.F revisara tu solicitud. Buena suerte!', ephemeral: true });
+      await interaction.reply({
+        content: '✅ **Postulacion enviada con exito!** El G.E.O.F revisara tu solicitud. Buena suerte!',
+        ephemeral: true,
+      });
       return;
     }
 
-    // ACEPTAR
+    // ACEPTAR ──────────────────────────────────────────────────────────────────
     if (interaction.isButton() && interaction.customId.startsWith('aceptar_')) {
       const tieneRol = interaction.member.roles.cache.some(r => ROLES_IDS.includes(r.id));
       if (!tieneRol) {
@@ -226,8 +288,8 @@ client.on(Events.InteractionCreate, async (interaction) => {
         return;
       }
 
-      const nombreAceptador = getNombre(interaction.member);
-      const postulantUserId = interaction.customId.replace('aceptar_', '');
+      const nombreAceptador  = getNombre(interaction.member);
+      const postulantUserId  = interaction.customId.replace('aceptar_', '');
       const postulanteMember = await interaction.guild.members.fetch(postulantUserId).catch(() => null);
 
       if (postulanteMember) {
@@ -235,7 +297,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
           await postulanteMember.roles.add(ROL_MIEMBRO_GEOF);
           console.log(`✅ Rol asignado a ${postulantUserId}`);
         } catch (err) {
-          console.error('Error asignando rol: ' + err.message);
+          console.error('Error asignando rol:', err.message);
         }
       }
 
@@ -251,7 +313,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
       return;
     }
 
-    // RECHAZAR
+    // RECHAZAR ─────────────────────────────────────────────────────────────────
     if (interaction.isButton() && interaction.customId.startsWith('rechazar_')) {
       const tieneRol = interaction.member.roles.cache.some(r => ROLES_IDS.includes(r.id));
       if (!tieneRol) {
@@ -276,8 +338,10 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
   } catch (err) {
     console.error('Error en interaccion:', err);
+    // Limpiar respuestas del usuario para que pueda reintentar sin esperar
+    if (interaction?.user?.id) userResponses.delete(interaction.user.id);
     try {
-      const msg = { content: '❌ Ocurrio un error. Intenta nuevamente.', ephemeral: true };
+      const msg = { content: '❌ Ocurrio un error. Ya podes intentarlo de nuevo.', ephemeral: true };
       if (interaction.replied || interaction.deferred) {
         await interaction.followUp(msg);
       } else {
@@ -286,19 +350,5 @@ client.on(Events.InteractionCreate, async (interaction) => {
     } catch {}
   }
 });
-
-function buildModal(customId, title, fields) {
-  const modal = new ModalBuilder().setCustomId(customId).setTitle(title);
-  for (const f of fields) {
-    const input = new TextInputBuilder()
-      .setCustomId(f.id)
-      .setLabel(f.label)
-      .setStyle(f.style === 'Short' ? TextInputStyle.Short : TextInputStyle.Paragraph)
-      .setRequired(true);
-    if (f.placeholder) input.setPlaceholder(f.placeholder);
-    modal.addComponents(new ActionRowBuilder().addComponents(input));
-  }
-  return modal;
-}
 
 client.login(process.env.TOKEN);
