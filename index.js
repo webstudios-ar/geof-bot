@@ -86,6 +86,63 @@ const COLOR = {
 const DIV = '━━━━━━━━━━━━━━━━━━━━━━━';
 const SEP = '▸';
 
+// ==================== PROCEDIMIENTOS DE INTERPRETACIÓN ====================
+// Para agregar un procedimiento nuevo: copiá un bloque completo, cambialo y listo.
+//   valor        -> identificador interno, sin espacios ni acentos (máx. 100 caracteres)
+//   nombre       -> lo que se ve en la lista del comando (máx. 100 caracteres)
+//   resumen      -> bajada del embed
+//   aclaraciones -> array de líneas informativas (opcional, puede ir vacío: [])
+//   lineas       -> el bloque copiable, EXACTAMENTE como se pega en el juego
+// Límite de Discord: máximo 25 procedimientos en la lista.
+const PROCEDIMIENTOS = [
+  {
+    valor: 'detector-mentiras',
+    nombre: 'Detector de mentiras',
+    resumen: 'Procedimiento completo de utilización del detector de mentiras durante un interrogatorio.',
+    aclaraciones: [
+      'El interrogatorio cuenta con dos líneas de resultado, verdadera y falsa. Se envía únicamente la que corresponda en cada caso.',
+      'Las líneas del interrogatorio se repiten tantas veces como preguntas se formulen.',
+      'El orden de las líneas no debe alterarse.'
+    ],
+    lineas: [
+      '/e box',
+      '/me deja la máquina sobre la mesa',
+      '/me enciende el detector de mentiras y prepara los sensores',
+      '/do El detector de mentiras estaría conectado a un monitor portátil.',
+      '/e tablet',
+      '/me coloca los sensores en los dedos y el brazo del sujeto',
+      '/do El sospechoso sentiría una ligera presión en el brazo por el brazalete.',
+      '/do El detector emitiría una luz verde si dice la verdad, o roja si miente.',
+      '/do ¿Sería verdad?',
+      '/do La luz del detector se enciende en verde tras la respuesta.',
+      '/do La luz del detector se enciende en rojo tras la respuesta.',
+      '/me apaga el detector y retira los sensores del sospechoso',
+      '/do El sospechoso quedaría libre de los sensores, sin daños.',
+      '/me guarda el informe con los resultados obtenidos',
+      '/me guarda el detector de mentiras en la caja',
+      '/e box'
+    ]
+  }
+];
+
+// Parte el bloque copiable en trozos que respeten el límite de 2000 caracteres de Discord.
+const trozosProcedimiento = (lineas) => {
+  const trozos = [];
+  let actual = [];
+  let largo = 0;
+  for (const linea of lineas) {
+    if (largo + linea.length + 1 > 1900 && actual.length > 0) {
+      trozos.push(actual);
+      actual = [];
+      largo = 0;
+    }
+    actual.push(linea);
+    largo += linea.length + 1;
+  }
+  if (actual.length > 0) trozos.push(actual);
+  return trozos;
+};
+
 // ==================== ESTADO ====================
 const asistentes = {};
 const postulacionesActivas = {};
@@ -474,6 +531,16 @@ client.once('ready', async () => {
     .addSubcommand(s => s.setName('eliminar').setDescription('[INTEL] Elimina el legajo de una persona')
       .addStringOption(o => o.setName('buscar').setDescription('Elegí de la lista').setRequired(true).setAutocomplete(true)));
 
+  const procedimientoCmd = new SlashCommandBuilder()
+    .setName('procedimiento')
+    .setDescription('[HEAD] Publica un procedimiento de interpretación con su bloque copiable')
+    .addStringOption(o => {
+      o.setName('nombre').setDescription('Procedimiento a publicar').setRequired(true);
+      for (const p of PROCEDIMIENTOS.slice(0, 25)) o.addChoices({ name: p.nombre, value: p.valor });
+      return o;
+    })
+    .addAttachmentOption(o => o.setName('video').setDescription('Video demostrativo (opcional)').setRequired(false));
+
   const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
 
   try {
@@ -488,9 +555,9 @@ client.once('ready', async () => {
 
   try {
     await rest.put(Routes.applicationCommands(client.user.id), {
-      body: [geofCmd.toJSON(), normativasCmd.toJSON(), jerarquiaCmd.toJSON(), mafiaCmd.toJSON(), legajoCmd.toJSON()]
+      body: [geofCmd.toJSON(), normativasCmd.toJSON(), jerarquiaCmd.toJSON(), mafiaCmd.toJSON(), legajoCmd.toJSON(), procedimientoCmd.toJSON()]
     });
-    console.log('Comandos globales registrados: /geof, /normativas, /jerarquia, /mafia, /legajo');
+    console.log('Comandos globales registrados: /geof, /normativas, /jerarquia, /mafia, /legajo, /procedimiento');
   } catch (err) { console.error('Error registrando comandos:', err); }
 });
 
@@ -1042,7 +1109,7 @@ client.on('interactionCreate', async (interaction) => {
   // ==================== SLASH COMMANDS ====================
   if (!interaction.isChatInputCommand()) return;
   const cmd = interaction.commandName;
-  if (!['geof','normativas','jerarquia','mafia','legajo'].includes(cmd)) return;
+  if (!['geof','normativas','jerarquia','mafia','legajo','procedimiento'].includes(cmd)) return;
 
   const revisor = interaction.member?.displayName || interaction.user.username;
   const sub = ['geof', 'mafia', 'legajo'].includes(cmd) ? interaction.options.getSubcommand() : null;
@@ -1217,6 +1284,78 @@ client.on('interactionCreate', async (interaction) => {
   }
 
   // ==================== /normativas ====================
+  // ==================== /procedimiento ====================
+  if (cmd === 'procedimiento') {
+    await interaction.deferReply({ ephemeral: true });
+
+    const valor = interaction.options.getString('nombre');
+    const proc = PROCEDIMIENTOS.find(p => p.valor === valor);
+    if (!proc) {
+      await interaction.editReply({ embeds: [embedBase(COLOR.RECHAZADO).setTitle('❌ Procedimiento inexistente')] });
+      return;
+    }
+
+    const video = interaction.options.getAttachment('video');
+
+    let desc =
+      `${proc.resumen}\n\n${DIV}\n` +
+      `## ◾ MODO DE USO\n\n` +
+      `${SEP} Copiar el bloque publicado en el hilo mediante el botón de copiado\n` +
+      `${SEP} Conservar la línea correspondiente al paso en curso y eliminar el resto del texto\n` +
+      `${SEP} Enviar la línea y repetir con cada paso, respetando el orden establecido\n\n` +
+      `-# El texto permanece en el portapapeles durante toda la interpretación: no es necesario volver a este canal.`;
+
+    if (proc.aclaraciones && proc.aclaraciones.length > 0) {
+      desc += `\n\n${DIV}\n## ◾ CONSIDERACIONES\n\n` + proc.aclaraciones.map(a => `${SEP} ${a}`).join('\n');
+    }
+
+    const embedProc = new EmbedBuilder()
+      .setAuthor({ name: 'G.E.O.F • Grupo Especial de Operaciones Federales' })
+      .setTitle(`📘 ${proc.nombre.toUpperCase()}`)
+      .setColor(COLOR.BASE)
+      .setDescription(desc)
+      .setFooter({ text: 'G.E.O.F • Procedimientos de interpretación' })
+      .setTimestamp();
+
+    try {
+      const mensaje = await interaction.channel.send({
+        embeds: [embedProc],
+        files: video ? [video.url] : [],
+        allowedMentions: { parse: [] }
+      });
+
+      const trozos = trozosProcedimiento(proc.lineas);
+      let destino = interaction.channel;
+      let enHilo = false;
+
+      try {
+        destino = await mensaje.startThread({
+          name: proc.nombre.slice(0, 90),
+          autoArchiveDuration: 10080
+        });
+        enHilo = true;
+      } catch (e) {
+        console.warn('[PROCEDIMIENTO] No se pudo crear el hilo:', e.message);
+      }
+
+      // El bloque va solo, sin texto alrededor: así el copiado desde celular no arrastra nada más.
+      for (const trozo of trozos) {
+        await destino.send({ content: '```\n' + trozo.join('\n') + '\n```', allowedMentions: { parse: [] } });
+      }
+
+      await interaction.editReply({
+        embeds: [embedBase(COLOR.EXITO)
+          .setTitle('✅ Procedimiento publicado')
+          .setDescription(enHilo
+            ? `**${proc.nombre}** publicado. El bloque copiable quedó en el hilo del mensaje.`
+            : `**${proc.nombre}** publicado. No se pudo abrir el hilo, así que el bloque quedó en este mismo canal.`)]
+      });
+    } catch (e) {
+      try { await interaction.editReply({ embeds: [embedBase(COLOR.RECHAZADO).setTitle('❌ Error').setDescription(`\`${e.message}\``)] }); } catch (e2) {}
+    }
+    return;
+  }
+
   if (cmd === 'normativas') {
     await interaction.deferReply({ ephemeral: true });
     const rol = (id, fallback) => (id && /^\d{17,20}$/.test(id)) ? `<@&${id}>` : `**${fallback}**`;
