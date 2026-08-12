@@ -539,7 +539,8 @@ client.once('ready', async () => {
       for (const p of PROCEDIMIENTOS.slice(0, 25)) o.addChoices({ name: p.nombre, value: p.valor });
       return o;
     })
-    .addAttachmentOption(o => o.setName('video').setDescription('Video demostrativo (opcional)').setRequired(false));
+    .addAttachmentOption(o => o.setName('video').setDescription('Video demostrativo (archivo, sujeto al límite de subida del servidor)').setRequired(false))
+    .addStringOption(o => o.setName('video_url').setDescription('Link al video (YouTube, Medal, Streamable) — sin límite de peso').setRequired(false).setMaxLength(300));
 
   const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
 
@@ -1296,6 +1297,7 @@ client.on('interactionCreate', async (interaction) => {
     }
 
     const video = interaction.options.getAttachment('video');
+    const videoUrl = interaction.options.getString('video_url');
 
     let desc =
       `${proc.resumen}\n\n${DIV}\n` +
@@ -1309,6 +1311,10 @@ client.on('interactionCreate', async (interaction) => {
       desc += `\n\n${DIV}\n## ◾ CONSIDERACIONES\n\n` + proc.aclaraciones.map(a => `${SEP} ${a}`).join('\n');
     }
 
+    if (videoUrl && /^https?:\/\//i.test(videoUrl)) {
+      desc += `\n\n${DIV}\n## ◾ MATERIAL AUDIOVISUAL\n\n${SEP} [Ver el video del procedimiento](${videoUrl})`;
+    }
+
     const embedProc = new EmbedBuilder()
       .setAuthor({ name: 'G.E.O.F • Grupo Especial de Operaciones Federales' })
       .setTitle(`📘 ${proc.nombre.toUpperCase()}`)
@@ -1318,11 +1324,26 @@ client.on('interactionCreate', async (interaction) => {
       .setTimestamp();
 
     try {
-      const mensaje = await interaction.channel.send({
-        embeds: [embedProc],
-        files: video ? [video.url] : [],
-        allowedMentions: { parse: [] }
-      });
+      let mensaje;
+      let avisoVideo = '';
+
+      try {
+        mensaje = await interaction.channel.send({
+          embeds: [embedProc],
+          files: video ? [video.url] : [],
+          allowedMentions: { parse: [] }
+        });
+      } catch (e) {
+        const esTamano = e.status === 413 || /entity too large|Request entity too large|40005/i.test(e.message || '');
+        if (video && esTamano) {
+          // El video supera el límite de subida: se publica igual el procedimiento, sin el archivo.
+          const peso = (video.size / 1048576).toFixed(1);
+          mensaje = await interaction.channel.send({ embeds: [embedProc], allowedMentions: { parse: [] } });
+          avisoVideo = `\n\n⚠️ El video pesa **${peso} MB** y supera el límite de subida del servidor. El procedimiento se publicó sin el archivo: subilo aparte al hilo, o volvé a ejecutar el comando usando la opción \`video_url\` con un link.`;
+        } else {
+          throw e;
+        }
+      }
 
       const trozos = trozosProcedimiento(proc.lineas);
       let destino = interaction.channel;
@@ -1344,11 +1365,11 @@ client.on('interactionCreate', async (interaction) => {
       }
 
       await interaction.editReply({
-        embeds: [embedBase(COLOR.EXITO)
-          .setTitle('✅ Procedimiento publicado')
-          .setDescription(enHilo
+        embeds: [embedBase(avisoVideo ? COLOR.ADVERTENCIA : COLOR.EXITO)
+          .setTitle(avisoVideo ? '⚠️ Procedimiento publicado sin el video' : '✅ Procedimiento publicado')
+          .setDescription((enHilo
             ? `**${proc.nombre}** publicado. El bloque copiable quedó en el hilo del mensaje.`
-            : `**${proc.nombre}** publicado. No se pudo abrir el hilo, así que el bloque quedó en este mismo canal.`)]
+            : `**${proc.nombre}** publicado. No se pudo abrir el hilo, así que el bloque quedó en este mismo canal.`) + avisoVideo)]
       });
     } catch (e) {
       try { await interaction.editReply({ embeds: [embedBase(COLOR.RECHAZADO).setTitle('❌ Error').setDescription(`\`${e.message}\``)] }); } catch (e2) {}
