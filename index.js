@@ -44,7 +44,6 @@ const ROL_NEGOCIADOR      = '1384748836978823300';
 const ROL_FRANCOTIRADOR   = '1384748893362983005';
 const ROL_TACTICO         = '1412986446599557170';
 const ROL_GEOF            = '1384737385551495178';
-const ROL_MIEMBRO_GEOF    = '1474252638832033884'; // rol que se asigna al aprobar por botón
 
 const ROL_JEFE_INTEL      = 'PENDIENTE';
 const ROL_INFILTRADO      = 'PENDIENTE';
@@ -1101,8 +1100,8 @@ client.on('interactionCreate', async (interaction) => {
             return;
           }
           try {
-            // Asignar rol Táctico (base) + ROL_MIEMBRO_GEOF (el que pidió en esta sesión)
-            for (const r of [ROL_GEOF, ROL_TACTICO, ROL_MIEMBRO_GEOF]) {
+            // Al aprobar: rol GEOF + Táctico (rango de ingreso de la subdivisión)
+            for (const r of [ROL_GEOF, ROL_TACTICO]) {
               if (!miembro.roles.cache.has(r)) await miembro.roles.add(r, 'Ingreso G.E.O.F por aprobación');
             }
           } catch (e) {
@@ -1127,7 +1126,7 @@ client.on('interactionCreate', async (interaction) => {
           try {
             const canalUp = await client.channels.fetch(CANAL_UPDATES);
             // ACTUALIZACIÓN: @postulante > NUEVO @rol
-            await canalUp.send({ content: `📋 **Update:** <@${discordId}> **> NUEVO** <@&${ROL_MIEMBRO_GEOF}>`, embeds: [embedIngreso] });
+            await canalUp.send({ content: `📋 **Update:** <@${discordId}> **> NUEVO** <@&${ROL_TACTICO}>`, embeds: [embedIngreso] });
           } catch (e) { console.error('Publicar ingreso:', e.message); }
 
           // DM al aprobado
@@ -1547,8 +1546,6 @@ client.on('interactionCreate', async (interaction) => {
         '          JEFE / SUB JEFE\n' +
         '                 |\n' +
         '  NEGOCIADOR · FRANCOTIRADOR · TÁCTICO\n' +
-        '                 |\n' +
-        '               MIEMBRO\n' +
         '```\n' +
         `## ⬛ CONDUCCIÓN\n\n` +
         `👑 ${rol(ROL_DUENO_GEOF, 'Dueño/a G.E.O.F')}\n` +
@@ -1574,10 +1571,8 @@ client.on('interactionCreate', async (interaction) => {
         `${SEP} Cobertura y observación desde posición elevada\n${SEP} Aporta información del objetivo al mando\n` +
         `⚠️ No efectúa disparo sin autorización expresa.\n\n` +
         `⚔️ ${rol(ROL_TACTICO, 'Táctico')}\n` +
-        `${SEP} Elemento de asalto. Ejecuta ingresos y aseguramiento\n${SEP} Protege al Negociador durante la intervención\n${SEP} Cumple la orden del mando sin dilación\n\n${DIV}\n` +
-        `## ⬛ AGENTES\n\n` +
-        `🔸 ${rol(ROL_MIEMBRO_GEOF, 'Miembro G.E.O.F')}\n` +
-        `${SEP} Agente operativo de la subdivisión\n${SEP} Ingresa por postulación con examen\n${SEP} Accede a las funciones tácticas según desempeño`
+        `${SEP} Elemento de asalto. Ejecuta ingresos y aseguramiento\n${SEP} Protege al Negociador durante la intervención\n${SEP} Cumple la orden del mando sin dilación\n` +
+        `-# Rango de ingreso a la subdivisión. El pase a Negociador o Francotirador depende del desempeño.`
       )
       .setFooter({ text: 'G.E.O.F • Estructura de Mando' });
 
