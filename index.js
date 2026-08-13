@@ -1533,41 +1533,90 @@ client.on('interactionCreate', async (interaction) => {
 
     const embedOps = new EmbedBuilder()
       .setAuthor({ name: 'G.E.O.F • Grupo Especial de Operaciones Federales' })
-      .setTitle('⚔️ RAMA DE OPERACIONES')
+      .setTitle('⚔️ ESTRUCTURA DE MANDO')
       .setColor(COLOR.OPERATIVO)
       .setDescription(
-        `## ◾ CONDUCCIÓN\n\n` +
-        `👑 ${rol(ROL_DUENO_GEOF, 'Dueño')} — Autoridad máxima. Conducción institucional.\n` +
-        `🎖️ ${rol(ROL_DIRECTOR_GEOF, 'Director')} — Conducción efectiva. Máxima autoridad operativa activa.\n` +
-        `🎯 ${rol(ROL_COMANDANTE_GEOF, 'Comandante')} — Nexo entre Dirección y mando en campo.\n\n${DIV}\n` +
-        `## ◾ JEFATURA EN CAMPO\n\n` +
-        `🧠 ${rol(ROL_JEFE_GEOF, 'Jefe')} — Comanda la intervención. Autoridad indiscutible en el terreno.\n` +
-        `🧩 ${rol(ROL_SUBJEFE_GEOF, 'Sub Jefe')} — Segundo al mando. Asume la conducción en ausencia del Jefe.\n\n${DIV}\n` +
-        `## ◾ FUNCIONES TÁCTICAS\n\n` +
-        `🗣️ ${rol(ROL_NEGOCIADOR, 'Negociador')} — Único habilitado para dialogar con el agresor.\n` +
-        `🎯 ${rol(ROL_FRANCOTIRADOR, 'Francotirador')} — Cobertura. **No efectúa disparo sin autorización expresa.**\n` +
-        `⚔️ ${rol(ROL_TACTICO, 'Táctico')} — Elemento de asalto. Ejecuta ingresos y aseguramiento.`
+        `Responsable de la intervención táctica: rescate de rehenes, ingresos de alto riesgo, aseguramiento de objetivos y resolución de situaciones críticas.\n\n` +
+        '```\n' +
+        '              DUEÑO/A\n' +
+        '                 |\n' +
+        '             DIRECTOR/A\n' +
+        '                 |\n' +
+        '             COMANDANTE\n' +
+        '                 |\n' +
+        '          JEFE / SUB JEFE\n' +
+        '                 |\n' +
+        '  NEGOCIADOR · FRANCOTIRADOR · TÁCTICO\n' +
+        '                 |\n' +
+        '               MIEMBRO\n' +
+        '```\n' +
+        `## ⬛ CONDUCCIÓN\n\n` +
+        `👑 ${rol(ROL_DUENO_GEOF, 'Dueño/a G.E.O.F')}\n` +
+        `${SEP} Autoridad máxima de la subdivisión\n${SEP} Establece la normativa, la estructura y sus modificaciones\n${SEP} Resuelve designaciones de alto rango y decisiones críticas\n` +
+        `-# Conducción institucional. No interviene en campo.\n\n` +
+        `⭐ ${rol(ROL_DIRECTOR_GEOF, 'Director/a G.E.O.F')}\n` +
+        `${SEP} Conducción efectiva de ambas ramas\n${SEP} Enlace con el alto mando de la P.F.A.\n${SEP} Autoriza intervenciones de envergadura\n` +
+        `-# Máxima autoridad operativa activa.\n\n${DIV}\n` +
+        `## ⬛ JEFATURA\n\n` +
+        `🎖️ ${rol(ROL_COMANDANTE_GEOF, 'Comandante G.E.O.F')}\n` +
+        `${SEP} Nexo entre la Dirección y el mando en campo\n${SEP} Supervisa el desempeño de la Jefatura\n${SEP} Conduce las intervenciones de mayor complejidad\n` +
+        `-# Traduce la decisión institucional en orden operativa.\n\n` +
+        `🥇 ${rol(ROL_JEFE_GEOF, 'Jefe G.E.O.F')}\n` +
+        `${SEP} Comanda la intervención en el terreno\n${SEP} Asigna funciones tácticas según la situación\n${SEP} Resuelve en tiempo real y responde por el resultado\n` +
+        `-# La autoridad en el terreno es indiscutible.\n\n` +
+        `🥈 ${rol(ROL_SUBJEFE_GEOF, 'Sub Jefe G.E.O.F')}\n` +
+        `${SEP} Segundo al mando de la subdivisión\n${SEP} Asume la conducción en ausencia del Jefe\n${SEP} Apoya la coordinación y el control del personal\n\n${DIV}\n` +
+        `## ⬛ FUNCIONES TÁCTICAS\n\n` +
+        `🗣️ ${rol(ROL_NEGOCIADOR, 'Negociador')}\n` +
+        `${SEP} Único habilitado para dialogar con el agresor\n${SEP} Administra rehenes, plazos y exigencias\n${SEP} Informa al mando la evolución de la crisis\n` +
+        `-# Su objetivo es resolver sin intervención armada.\n\n` +
+        `🎯 ${rol(ROL_FRANCOTIRADOR, 'Francotirador')}\n` +
+        `${SEP} Cobertura y observación desde posición elevada\n${SEP} Aporta información del objetivo al mando\n` +
+        `⚠️ No efectúa disparo sin autorización expresa.\n\n` +
+        `⚔️ ${rol(ROL_TACTICO, 'Táctico')}\n` +
+        `${SEP} Elemento de asalto. Ejecuta ingresos y aseguramiento\n${SEP} Protege al Negociador durante la intervención\n${SEP} Cumple la orden del mando sin dilación\n\n${DIV}\n` +
+        `## ⬛ AGENTES\n\n` +
+        `🔸 ${rol(ROL_MIEMBRO_GEOF, 'Miembro G.E.O.F')}\n` +
+        `${SEP} Agente operativo de la subdivisión\n${SEP} Ingresa por postulación con examen\n${SEP} Accede a las funciones tácticas según desempeño`
       )
-      .setFooter({ text: 'G.E.O.F • Rama de Operaciones' });
+      .setFooter({ text: 'G.E.O.F • Estructura de Mando' });
 
     const embedIntel = new EmbedBuilder()
       .setTitle('🕵️ RAMA DE INTELIGENCIA')
       .setColor(COLOR.RETIRO)
       .setDescription(
-        `Trabajo previo y posterior a la intervención: infiltración, análisis y obtención de información.\n\n${DIV}\n` +
-        `## ◾ CONDUCCIÓN\n\n` +
-        `🎖️ ${rol(ROL_DIRECTOR_GEOF, 'Director')} — Autoridad máxima sobre ambas ramas.\n` +
-        `🕶️ ${rol(ROL_JEFE_INTEL, 'Jefe de Inteligencia')} — Conduce la rama. **Reporta directamente al Director**, no al mando operativo. Único que conoce la asignación de cada infiltrado.\n\n${DIV}\n` +
-        `## ◾ FUNCIONES\n\n` +
-        `🎭 ${rol(ROL_INFILTRADO, 'Infiltrado')} — Opera bajo identidad encubierta. **Excluido de todo operativo contra la organización que infiltra.**\n` +
-        `📊 ${rol(ROL_ANALISTA, 'Analista')} — Elabora y actualiza los legajos de caso: estructura, vínculos y movimientos de cada organización.\n` +
-        `🔍 ${rol(ROL_INTERROGADOR, 'Interrogador')} — Obtiene información con posterioridad a la detención. A diferencia del Negociador, que interviene **durante** la crisis para evitar víctimas, el Interrogador actúa **una vez asegurado** el detenido.\n\n${DIV}\n` +
-        `## ◾ PROTOCOLO DEL INFILTRADO\n\n` +
-        `${SEP} **Requerimiento menor** (traslado, sustracción, encubrimiento) — Resuelve por decisión propia.\n` +
-        `${SEP} **Requerimiento mayor** (violencia o acción irreversible) — Agota previamente toda vía de simulación: errar el disparo, sabotear la acción, justificar la negativa.\n` +
-        `${SEP} **Imposibilidad de simular** — Solicita autorización al Jefe de Inteligencia. Existe una línea que no se cruza bajo ninguna circunstancia.\n` +
-        `${SEP} **Cruce de la línea o pérdida de cobertura** — Extracción inmediata y actuación de las consecuencias que correspondan.\n\n${DIV}\n` +
-        `## 📌 INCORPORACIÓN\n${SEP} **No se accede por postulación** — designación por cúpula\n${SEP} Compatible con la rama operativa`
+        `Trabajo previo y posterior a la intervención: infiltración, análisis y obtención de información.\n\n` +
+        '```\n' +
+        '             DIRECTOR/A\n' +
+        '                 |\n' +
+        '        JEFE DE INTELIGENCIA\n' +
+        '                 |\n' +
+        '  INFILTRADO · ANALISTA · INTERROGADOR\n' +
+        '```\n' +
+        `## ⬛ CONDUCCIÓN\n\n` +
+        `🕶️ ${rol(ROL_JEFE_INTEL, 'Jefe de Inteligencia')}\n` +
+        `${SEP} Conduce la rama y administra los casos abiertos\n${SEP} Reporta directamente al Director, no al mando operativo\n${SEP} Único que conoce la asignación de cada infiltrado\n` +
+        `-# La rama corre en paralelo a Operaciones, no por debajo.\n\n${DIV}\n` +
+        `## ⬛ FUNCIONES\n\n` +
+        `🎭 ${rol(ROL_INFILTRADO, 'Infiltrado')}\n` +
+        `${SEP} Opera bajo identidad encubierta dentro de la organización asignada\n${SEP} Contacto restringido a su conducción\n` +
+        `⚠️ Excluido de todo operativo contra la organización que infiltra.\n\n` +
+        `📊 ${rol(ROL_ANALISTA, 'Analista')}\n` +
+        `${SEP} Elabora y actualiza los legajos de caso\n${SEP} Establece estructura, vínculos y movimientos de cada organización\n` +
+        `-# Convierte lo que llega del infiltrado en información accionable.\n\n` +
+        `🔍 ${rol(ROL_INTERROGADOR, 'Interrogador')}\n` +
+        `${SEP} Obtiene información con posterioridad a la detención\n${SEP} Coteja lo declarado con el legajo del caso\n` +
+        `-# El Negociador interviene durante la crisis; el Interrogador, una vez asegurado el detenido.\n\n${DIV}\n` +
+        `## ⬛ PROTOCOLO DEL INFILTRADO\n\n` +
+        `${SEP} **Requerimiento menor** (traslado, sustracción, encubrimiento) — Resuelve por decisión propia\n` +
+        `${SEP} **Requerimiento mayor** (violencia o acción irreversible) — Agota previamente toda vía de simulación: errar el disparo, sabotear la acción, justificar la negativa\n` +
+        `${SEP} **Imposibilidad de simular** — Solicita autorización a su conducción. Existe una línea que no se cruza bajo ninguna circunstancia\n` +
+        `${SEP} **Cruce de la línea o pérdida de cobertura** — Extracción inmediata y actuación de las consecuencias que correspondan\n\n${DIV}\n` +
+        `## 🤝 ARTICULACIÓN CON OPERACIONES\n\n` +
+        `${SEP} Inteligencia aporta el objetivo, la estructura y el momento\n${SEP} Operaciones ejecuta la intervención\n${SEP} El infiltrado permanece fuera de toda actuación contra su organización\n` +
+        `-# Inteligencia trabaja antes y después. Operaciones, durante.\n\n${DIV}\n` +
+        `## 📌 INCORPORACIÓN\n\n` +
+        `${SEP} **No se accede por postulación** — designación por cúpula\n${SEP} Compatible con la rama operativa`
       )
       .setFooter({ text: 'G.E.O.F • Rama de Inteligencia' })
       .setTimestamp();
