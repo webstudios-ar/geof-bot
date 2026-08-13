@@ -46,6 +46,7 @@ const ROL_TACTICO         = '1412986446599557170';
 const ROL_GEOF            = '1384737385551495178';
 const ROL_MIEMBRO_GEOF    = '1474252638832033884'; // rol que se asigna al aprobar por botón
 
+const ROL_JEFE_INTEL      = 'PENDIENTE';
 const ROL_INFILTRADO      = 'PENDIENTE';
 const ROL_ANALISTA        = 'PENDIENTE';
 const ROL_INTERROGADOR    = 'PENDIENTE';
@@ -54,7 +55,7 @@ const ROL_INTERROGADOR    = 'PENDIENTE';
 const ALTO_MANDO = [ROL_DUENO_GEOF, ROL_DIRECTOR_GEOF, ROL_COMANDANTE_GEOF];
 const JEFATURA = [...ALTO_MANDO, ROL_JEFE_GEOF, ROL_SUBJEFE_GEOF];
 const MANDO_OPERATIVO = [...JEFATURA, ROL_NEGOCIADOR, ROL_FRANCOTIRADOR, ROL_TACTICO];
-const RAMA_INTEL = [...JEFATURA, ROL_ANALISTA, ROL_INTERROGADOR, ROL_INFILTRADO]
+const RAMA_INTEL = [...JEFATURA, ROL_JEFE_INTEL, ROL_ANALISTA, ROL_INTERROGADOR, ROL_INFILTRADO]
   .filter(r => /^\d{17,20}$/.test(r));
 const ROLES_AUTORIZADOS = JEFATURA;
 
@@ -215,6 +216,10 @@ const PROCEDIMIENTOS = [
     ]
   }
 ];
+
+// Minutos hasta que el hilo se archiva solo y deja de ocupar lugar en la lista de canales.
+// Valores admitidos por Discord: 60 (1 hora), 1440 (1 día), 4320 (3 días), 10080 (7 días).
+const ARCHIVO_HILO = 60;
 
 // Aviso fijo que se agrega al embed de todos los procedimientos.
 const NOTA_ORIENTATIVA =
@@ -1451,7 +1456,7 @@ client.on('interactionCreate', async (interaction) => {
       try {
         destino = await mensaje.startThread({
           name: proc.nombre.slice(0, 90),
-          autoArchiveDuration: 10080
+          autoArchiveDuration: ARCHIVO_HILO
         });
         enHilo = true;
       } catch (e) {
@@ -1550,10 +1555,18 @@ client.on('interactionCreate', async (interaction) => {
       .setColor(COLOR.RETIRO)
       .setDescription(
         `Trabajo previo y posterior a la intervención: infiltración, análisis y obtención de información.\n\n${DIV}\n` +
+        `## ◾ CONDUCCIÓN\n\n` +
+        `🎖️ ${rol(ROL_DIRECTOR_GEOF, 'Director')} — Autoridad máxima sobre ambas ramas.\n` +
+        `🕶️ ${rol(ROL_JEFE_INTEL, 'Jefe de Inteligencia')} — Conduce la rama. **Reporta directamente al Director**, no al mando operativo. Único que conoce la asignación de cada infiltrado.\n\n${DIV}\n` +
         `## ◾ FUNCIONES\n\n` +
-        `🎭 ${rol(ROL_INFILTRADO, 'Infiltrado')} — Opera bajo identidad encubierta. Excluido de operativos contra su organización.\n` +
-        `📊 ${rol(ROL_ANALISTA, 'Analista')} — Elabora y actualiza los legajos de caso.\n` +
-        `🔍 ${rol(ROL_INTERROGADOR, 'Interrogador')} — Obtiene información post-detención.\n\n${DIV}\n` +
+        `🎭 ${rol(ROL_INFILTRADO, 'Infiltrado')} — Opera bajo identidad encubierta. **Excluido de todo operativo contra la organización que infiltra.**\n` +
+        `📊 ${rol(ROL_ANALISTA, 'Analista')} — Elabora y actualiza los legajos de caso: estructura, vínculos y movimientos de cada organización.\n` +
+        `🔍 ${rol(ROL_INTERROGADOR, 'Interrogador')} — Obtiene información con posterioridad a la detención. A diferencia del Negociador, que interviene **durante** la crisis para evitar víctimas, el Interrogador actúa **una vez asegurado** el detenido.\n\n${DIV}\n` +
+        `## ◾ PROTOCOLO DEL INFILTRADO\n\n` +
+        `${SEP} **Requerimiento menor** (traslado, sustracción, encubrimiento) — Resuelve por decisión propia.\n` +
+        `${SEP} **Requerimiento mayor** (violencia o acción irreversible) — Agota previamente toda vía de simulación: errar el disparo, sabotear la acción, justificar la negativa.\n` +
+        `${SEP} **Imposibilidad de simular** — Solicita autorización al Jefe de Inteligencia. Existe una línea que no se cruza bajo ninguna circunstancia.\n` +
+        `${SEP} **Cruce de la línea o pérdida de cobertura** — Extracción inmediata y actuación de las consecuencias que correspondan.\n\n${DIV}\n` +
         `## 📌 INCORPORACIÓN\n${SEP} **No se accede por postulación** — designación por cúpula\n${SEP} Compatible con la rama operativa`
       )
       .setFooter({ text: 'G.E.O.F • Rama de Inteligencia' })
