@@ -122,8 +122,105 @@ const PROCEDIMIENTOS = [
       '/me guarda el detector de mentiras en la caja',
       '/e box'
     ]
+  },
+  {
+    valor: 'bateria',
+    nombre: 'Batería',
+    resumen: 'Procedimiento de utilización de la batería como método de coacción durante un interrogatorio.',
+    aclaraciones: [
+      'Su utilización requiere acuerdo previo con el jugador interviniente y se ajusta en todo momento a la normativa del servidor.',
+      'El procedimiento se interrumpe de inmediato ante cualquier indicación por vía OOC.',
+      'Las líneas de aumento de intensidad pueden omitirse según el desarrollo de la escena.',
+      'El orden de las líneas no debe alterarse.'
+    ],
+    lineas: [
+      '/me coloca la batería sobre la mesa y conecta dos cables con pinzas',
+      '/do La batería estaría cargada y lista para emitir descargas.',
+      '/me toma las pinzas y las acerca al sospechoso, amenazándolo',
+      '/do El sospechoso vería salir las chispas al juntar los cables.',
+      '/me coloca una de las pinzas en el brazo del sospechoso',
+      '/do El sospechoso sentiría el metal frío en la piel.',
+      '/me coloca la segunda pinza en el otro brazo y enciende el paso de la corriente',
+      '/do El sospechoso recibiría una descarga eléctrica que le provocaría dolor intenso y contracciones musculares.',
+      '/me aumenta la intensidad de la corriente, manteniendo la presión sobre los cables',
+      '/do El cuerpo del sospechoso se sacudiría violentamente por la descarga.',
+      '/me retira las pinzas del sospechoso y desconecta la batería',
+      '/do El sospechoso quedaría exhausto, con marcas leves de quemaduras y dolor muscular.'
+    ]
+  },
+  {
+    valor: 'cuchillo',
+    nombre: 'Cuchillo',
+    resumen: 'Procedimiento de utilización del cuchillo como método de coacción durante un interrogatorio.',
+    aclaraciones: [
+      'Su utilización requiere acuerdo previo con el jugador interviniente y se ajusta en todo momento a la normativa del servidor.',
+      'El procedimiento se interrumpe de inmediato ante cualquier indicación por vía OOC.',
+      'El orden de las líneas no debe alterarse.'
+    ],
+    lineas: [
+      '/me saca un cuchillo y lo acerca lentamente al sospechoso',
+      '/do El filo del cuchillo brillaría con la luz del lugar.',
+      '/me apoya la punta del cuchillo en el brazo del sospechoso y presiona levemente',
+      '/do El sospechoso sentiría un dolor punzante y vería un leve corte en su piel.',
+      '/me le muestra el cuchillo ensangrentado'
+    ]
+  },
+  {
+    valor: 'hacha',
+    nombre: 'Hacha',
+    resumen: 'Procedimiento de utilización del hacha como método de coacción durante un interrogatorio.',
+    aclaraciones: [
+      'Su utilización requiere acuerdo previo con el jugador interviniente y se ajusta en todo momento a la normativa del servidor.',
+      'El procedimiento se interrumpe de inmediato ante cualquier indicación por vía OOC.',
+      'Finalizada la animación de impacto, se retoma la animación de sostén mediante /e axe.',
+      'El orden de las líneas no debe alterarse.'
+    ],
+    lineas: [
+      '/e axe',
+      '/me toma el hacha y la apoya contra el suelo, dejándola a la vista del sospechoso',
+      '/do Se vería el filo del hacha.',
+      '/me se acerca lentamente al sospechoso, levantando el hacha con ambas manos',
+      '/me acerca el filo del hacha al cuello del sospechoso, sin tocarlo',
+      '/do El sospechoso sentiría el frío del metal muy cerca de su piel.',
+      '/me golpea la mesa con el mango del hacha para intimidar',
+      '/do El sonido seco del golpe aumentaría la tensión en la sala.',
+      '/me desliza el filo del hacha por el brazo del sospechoso, apenas cortando la piel',
+      '/do El sospechoso sentiría un corte superficial y dolor punzante.',
+      '/me apoya el filo en la pierna del sospechoso y ejerce presión',
+      '/do El sospechoso sentiría una mezcla de miedo y dolor por la presión del hacha.',
+      '/me levanta el hacha y la deja caer cerca del pie del sospechoso',
+      '/e axe2',
+      '/e axe',
+      '/do El filo impactaría contra el suelo, a pocos centímetros de su pie.',
+      '/me limpia el filo del hacha y la guarda',
+      '/do El sospechoso quedaría con heridas leves y un fuerte estado de conmoción.'
+    ]
+  },
+  {
+    valor: 'cinta',
+    nombre: 'Cinta',
+    resumen: 'Procedimiento de utilización de la cinta para impedir la comunicación del sospechoso durante un interrogatorio.',
+    aclaraciones: [
+      'Su utilización requiere acuerdo previo con el jugador interviniente y se ajusta en todo momento a la normativa del servidor.',
+      'El procedimiento se interrumpe de inmediato ante cualquier indicación por vía OOC.',
+      'Los intentos de habla del sospechoso son interpretados por el propio jugador y no forman parte de este bloque.',
+      'El orden de las líneas no debe alterarse.'
+    ],
+    lineas: [
+      '/me toma un trozo de cinta y lo coloca firmemente sobre la boca del sospechoso',
+      '/do El sospechoso tendría la boca cubierta, lo que le dificultaría hablar.',
+      '/do Solo se escucharían murmullos apagados e incomprensibles.',
+      '/me arranca la cinta de la boca del sospechoso de un tirón',
+      '/do El sospechoso sentiría dolor en la piel y podría volver a hablar.'
+    ]
   }
 ];
+
+// Aviso fijo que se agrega al embed de todos los procedimientos.
+const NOTA_ORIENTATIVA =
+  'El presente procedimiento constituye una forma posible de interpretar la situación y no una fórmula obligatoria. ' +
+  'Cada efectivo se encuentra habilitado a desarrollar sus propias acciones sobre la marcha, siempre que resulten coherentes con la escena y con el contexto del procedimiento.\n' +
+  'Quienes no cuenten con experiencia en la utilización de /me y /do, o encuentren dificultad para desarrollarlos, deben seguir este procedimiento al pie de la letra: constituye la forma correcta de ejecutarlo.';
 
 // Parte el bloque copiable en trozos que respeten el límite de 2000 caracteres de Discord.
 const trozosProcedimiento = (lineas) => {
@@ -1310,6 +1407,8 @@ client.on('interactionCreate', async (interaction) => {
     if (proc.aclaraciones && proc.aclaraciones.length > 0) {
       desc += `\n\n${DIV}\n## ◾ CONSIDERACIONES\n\n` + proc.aclaraciones.map(a => `${SEP} ${a}`).join('\n');
     }
+
+    desc += `\n\n${DIV}\n## ◾ CARÁCTER ORIENTATIVO\n\n` + NOTA_ORIENTATIVA.split('\n').map(l => `${SEP} ${l}`).join('\n');
 
     if (videoUrl && /^https?:\/\//i.test(videoUrl)) {
       desc += `\n\n${DIV}\n## ◾ MATERIAL AUDIOVISUAL\n\n${SEP} [Ver el video del procedimiento](${videoUrl})`;
