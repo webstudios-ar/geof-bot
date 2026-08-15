@@ -1490,14 +1490,24 @@ client.on('interactionCreate', async (interaction) => {
       .setDescription(
         `-# Estar en el G.E.O.F es un privilegio, no un derecho adquirido.\n\n${DIV}\n` +
         `## ◾ INGRESO\n\n` +
-        `${SEP} Rango mínimo **Sargento** en la P.F.A.\n${SEP} **Conducta intachable. Con sanciones vigentes no se ingresa ni se permanece**\n${SEP} Micrófono funcional y disponibilidad para operativos\n${SEP} Aprobar la evaluación de ingreso\n\n` +
+        `${SEP} Rango mínimo **Sargento** en la P.F.A.\n` +
+        `${SEP} **Conducta intachable. Con sanciones vigentes no se ingresa ni se permanece**\n` +
+        `${SEP} Micrófono funcional y disponibilidad para operativos\n` +
+        `${SEP} Aprobar la evaluación de ingreso\n` +
+        `${SEP} El ingreso se produce en la función de ${rol(ROL_TACTICO, 'Táctico')}\n\n` +
         `**Evaluación**\n${SEP} Cuatro instancias, plazo de **15 minutos**\n${SEP} Se evalúa criterio, no extensión\n${SEP} Copiar respuestas implica **rechazo automático**\n${SEP} Rechazada la postulación, espera de **24 horas**\n\n` +
-        `**Ascensos**\n${SEP} Se ponderan actividad, desempeño, disciplina y conducción\n${SEP} Los resuelve el alto mando\n-# El ascenso no se solicita ni se reclama.\n\n` +
-        `**Inteligencia**\n${SEP} **No se postula** — la designación es facultad de la cúpula\n${SEP} Sus funciones son compatibles con la rama operativa\n\n${DIV}\n` +
+        `**Ascensos**\n${SEP} Se ponderan actividad, desempeño, disciplina y conducción\n${SEP} El pase a ${rol(ROL_NEGOCIADOR, 'Negociador')} o ${rol(ROL_FRANCOTIRADOR, 'Francotirador')} lo resuelve el alto mando\n-# El ascenso no se solicita ni se reclama.\n\n` +
+        `**Inteligencia**\n${SEP} **No se postula** — la designación es facultad de la cúpula\n${SEP} La conducción de la rama recae en el ${rol(ROL_JEFE_INTEL, 'Jefe de Inteligencia')}\n${SEP} Sus funciones son compatibles con la rama operativa\n\n${DIV}\n` +
         `## ◾ OPERACIÓN\n\n` +
-        `**Cadena de mando**\n${SEP} La autoridad en el terreno recae en el **Jefe** presente\n${SEP} Las órdenes se ejecutan sin dilación\n${SEP} Toda objeción se eleva **finalizado** el operativo, nunca durante\n\n` +
-        `**Uso de la fuerza**\n${SEP} La negociación es **obligatoria** ante rehenes\n${SEP} El ${rol(ROL_NEGOCIADOR, 'Negociador')} es el único habilitado para dialogar\n${SEP} Nadie interfiere una negociación en curso\n${SEP} La fuerza es el último recurso\n\n` +
-        `⚠️ **El ${rol(ROL_FRANCOTIRADOR, 'Francotirador')} no efectúa disparo sin autorización expresa del Jefe. Sin excepción.**`
+        `**Cadena de mando**\n${SEP} La autoridad en el terreno recae en el **Jefe** presente; en su ausencia, el **Sub Jefe**\n${SEP} Las órdenes se ejecutan sin dilación\n${SEP} Toda objeción se eleva **finalizado** el operativo, nunca durante\n\n` +
+        `**Funciones**\n${SEP} El Jefe asigna las funciones según el escenario\n${SEP} Cada integrante cumple la función asignada, no la que prefiere\n${SEP} Nadie actúa por fuera de su rol sin autorización\n\n` +
+        `**Uso de la fuerza**\n${SEP} La negociación es **obligatoria** ante rehenes\n${SEP} El ${rol(ROL_NEGOCIADOR, 'Negociador')} es el único habilitado para dialogar con el agresor\n${SEP} Nadie interfiere una negociación en curso\n${SEP} La fuerza es el último recurso\n` +
+        `⚠️ **El ${rol(ROL_FRANCOTIRADOR, 'Francotirador')} no efectúa disparo sin autorización expresa del Jefe. Sin excepción.**\n\n` +
+        `**Interpretación**\n` +
+        `${SEP} Todo procedimiento se interpreta mediante **/me** y **/do**\n` +
+        `${SEP} Los procedimientos publicados constituyen una forma posible; quien no domine los comandos los sigue al pie de la letra\n` +
+        `${SEP} **Los procedimientos de coacción requieren acuerdo previo del jugador interviniente**\n` +
+        `${SEP} Toda interpretación se interrumpe de inmediato ante indicación por vía OOC`
       )
       .setFooter({ text: 'G.E.O.F • I — Ingreso y operación' });
 
